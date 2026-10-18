@@ -34,5 +34,9 @@ app/libs/*.aar
 desktop/schemas/
 desktop/test/
 
+# libmpv runtime (downloaded separately, ~116MB)
+desktop/runtime/
+desktop/.kotlin/
+
 # Build artifacts in workspace root
 *.apk

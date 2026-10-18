@@ -51,10 +51,10 @@ private val TextSub = Color(0xFF98A2B0)
 private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /**
- * 详情页（只读）：海报/信息/简介/选集列表（M1 不含播放，播放链路属 M2 libmpv）
+ * 详情页：海报/信息/简介/选集列表；选集点击进入播放（M2 libmpv 链路）
  */
 @Composable
-fun DetailScreen(siteKey: String, vodId: String, onBack: () -> Unit) {
+fun DetailScreen(siteKey: String, vodId: String, onBack: () -> Unit, onPlay: (String, String, String) -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var vod by remember { mutableStateOf<Vod?>(null) }
@@ -80,7 +80,7 @@ fun DetailScreen(siteKey: String, vodId: String, onBack: () -> Unit) {
             error.isNotEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(text = "加载失败：$error", color = Color(0xFFE06A6A), fontSize = 14.sp)
             }
-            else -> vod?.let { DetailContent(it) }
+            else -> vod?.let { DetailContent(it, onPlay) }
         }
     }
 }
@@ -102,7 +102,7 @@ private fun DetailTopBar(onBack: () -> Unit) {
 }
 
 @Composable
-private fun DetailContent(vod: Vod) {
+private fun DetailContent(vod: Vod, onPlay: (String, String, String) -> Unit) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Row {
             PosterImage(
@@ -129,7 +129,7 @@ private fun DetailContent(vod: Vod) {
             Text(text = vod.getContent(), color = TextSub, fontSize = 13.sp, lineHeight = 20.sp)
         }
         val flags = vod.getFlags()
-        flags.forEach { flag -> EpisodeGroup(flag) }
+        flags.forEach { flag -> EpisodeGroup(flag, onPlay) }
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
@@ -143,7 +143,7 @@ private fun InfoLine(label: String, value: String, maxLines: Int = 1) {
 }
 
 @Composable
-private fun EpisodeGroup(flag: Flag) {
+private fun EpisodeGroup(flag: Flag, onPlay: (String, String, String) -> Unit) {
     Spacer(modifier = Modifier.height(20.dp))
     Text(text = flag.getShow(), color = Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     Spacer(modifier = Modifier.height(8.dp))
@@ -151,18 +151,19 @@ private fun EpisodeGroup(flag: Flag) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         episodes.chunked(6).forEach { chunk ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                chunk.forEach { episode -> EpisodeChip(episode) }
+                chunk.forEach { episode -> EpisodeChip(episode) { onPlay(flag.getFlag(), episode.getName(), episode.getUrl()) } }
             }
         }
     }
 }
 
 @Composable
-private fun EpisodeChip(episode: Episode) {
+private fun EpisodeChip(episode: Episode, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .background(Chip, RoundedCornerShape(4.dp))
             .border(1.dp, Color(0xFF2E3745), RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         Text(text = episode.getName(), color = TextMain, fontSize = 12.sp, maxLines = 1)

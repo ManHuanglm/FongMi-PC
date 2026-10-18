@@ -41,6 +41,10 @@ class AppModel {
 
     private var extend: MutableMap<String, String> = HashMap()
 
+    /** 详情页跳播放页时携带的影片信息（用于 History 记录） */
+    var currentVodName: String? = null
+    var currentVodPic: String? = null
+
     fun activeType(): Class? = types.getOrNull(activeIndex)
 
     fun currentFilters(): List<Filter> = activeType()?.getFilters() ?: emptyList()

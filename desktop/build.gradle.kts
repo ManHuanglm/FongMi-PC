@@ -131,6 +131,10 @@ dependencies {
     // Room 注解（仅编译期注解；桌面端数据库为手写实现，运行时用 bundled SQLite 驱动）
     implementation("androidx.room:room-common:2.8.5")
     implementation("androidx.sqlite:sqlite-bundled-jvm:2.6.2")
+
+    // libmpv JNA 绑定（播放核心；版本与安卓端一致）
+    implementation("net.java.dev.jna:jna:5.19.1")
+    implementation("net.java.dev.jna:jna-platform:5.19.1")
 }
 
 application {

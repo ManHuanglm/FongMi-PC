@@ -554,7 +554,7 @@ class AppDatabase private constructor(private val db: SQLiteConnection) {
         override fun update(item: History?) {
             db.prepare("UPDATE OR REPLACE `History` SET `vodPic`=?,`vodName`=?,`vodFlag`=?,`vodRemarks`=?,`episodeUrl`=?,`revSort`=?,`revPlay`=?,`createTime`=?,`opening`=?,`ending`=?,`position`=?,`duration`=?,`speed`=?,`scale`=?,`cid`=? WHERE `key`=?").use { stmt ->
                 bindHistoryUpdate(stmt, item)
-                stmt.bindText(15, item?.getKey() ?: "")
+                stmt.bindText(16, item?.getKey() ?: "")
                 stmt.step()
             }
         }
