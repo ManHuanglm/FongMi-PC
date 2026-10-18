@@ -1,4 +1,4 @@
-﻿import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("jvm") version "2.2.10"
@@ -83,7 +83,10 @@ val syncAndroidSources = tasks.register<Sync>("syncAndroidSources") {
         include("com/fongmi/android/tv/ui/base/ViewType.java")
     }
     // catvod 网络与工具层全量挂载（Android API 由桌面 shim 层支撑）
-    from("../catvod/src/main/java")
+    from("../catvod/src/main/java") {
+        // Json 工具桌面替换实现（解析订阅 JSON 需宽容模式，容忍注释/尾逗号等 TVBox 常见写法）
+        exclude("com/github/catvod/utils/Json.java")
+    }
     into(layout.buildDirectory.dir("androidSrc"))
 }
 

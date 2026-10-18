@@ -165,11 +165,11 @@ private fun HomeTopBar(model: AppModel, onOpenSearch: () -> Unit, onOpenKeep: ()
             CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Accent, strokeWidth = 2.dp)
             Spacer(modifier = Modifier.width(12.dp))
         }
-        TopIcon("🔍", "搜索") { onOpenSearch() }
-        Spacer(modifier = Modifier.width(14.dp))
-        TopIcon("★", "收藏") { onOpenKeep() }
-        Spacer(modifier = Modifier.width(14.dp))
-        TopIcon("🕘", "最近观看") { onOpenHistory() }
+        ChipButton(text = "最近观看") { onOpenHistory() }
+        Spacer(modifier = Modifier.width(8.dp))
+        ChipButton(text = "收藏") { onOpenKeep() }
+        Spacer(modifier = Modifier.width(8.dp))
+        ChipButton(text = "搜索", selected = true) { onOpenSearch() }
     }
     if (siteDialog) SitePickerDialog(appModel = model, onDismiss = { siteDialog = false })
 }
@@ -196,16 +196,6 @@ private fun LogoAvatar(logoUrl: String, siteName: String, onClick: () -> Unit) {
             Text(text = siteName.take(1).ifEmpty { "F" }, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
-}
-
-@Composable
-private fun TopIcon(icon: String, contentDescription: String, onClick: () -> Unit) {
-    Text(
-        text = icon,
-        color = TextMain,
-        fontSize = 17.sp,
-        modifier = Modifier.clickable(onClick = onClick).padding(4.dp)
-    )
 }
 
 @Composable
