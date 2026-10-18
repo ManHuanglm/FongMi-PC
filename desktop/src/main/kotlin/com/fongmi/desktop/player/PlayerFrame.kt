@@ -1,19 +1,15 @@
 package com.fongmi.desktop.player
 
 import java.awt.BorderLayout
-import java.awt.Canvas
 import java.awt.Color
-import java.awt.Rectangle
 import java.awt.Window
-import java.awt.event.ComponentAdapter
-import java.awt.event.ComponentEvent
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import javax.swing.JFrame
 
 /**
- * 播放窗口：独立 JFrame（无装饰，owner 为主窗口），内嵌 PlayerPanel（Canvas + 控制条）
- * bounds 持续跟随主窗口客户区；窗口关闭等价于"返回"
+ * 播放窗口：普通可缩放 JFrame（owner 为主窗口），内嵌 PlayerPanel（Canvas + 控制条）
+ * 全屏按钮等价于最大化切换；窗口关闭等价于"返回"
  */
 class PlayerFrame(
     owner: Window,
@@ -37,29 +33,25 @@ class PlayerFrame(
 
     private val onCloseCallback: (() -> Unit) = onBack
 
+    /** 全屏切换 = 最大化（最大化边界限定在当前屏幕） */
     private fun toggleFullscreen() {
-        // owner 在窗口关闭瞬间可能为 null，避免全屏切换竞态崩溃
-        val owner = getOwner() ?: return
-        maximizedBounds = owner.bounds
+        maximizedBounds = graphicsConfiguration?.bounds
         extendedState = if (extendedState and MAXIMIZED_BOTH != 0) NORMAL else MAXIMIZED_BOTH
     }
 
     init {
-        isUndecorated = true
         background = Color(0xFF05080C.toInt())
         layout = BorderLayout()
         add(panel, BorderLayout.CENTER)
         defaultCloseOperation = DO_NOTHING_ON_CLOSE
+        setSize(1280, 720)
+        setLocationRelativeTo(owner)
+        isResizable = true
         addWindowListener(object : WindowAdapter() {
             override fun windowClosing(e: WindowEvent) {
                 dispatchClose()
             }
         })
-        owner.addComponentListener(object : ComponentAdapter() {
-            override fun componentResized(e: ComponentEvent) = syncBounds()
-            override fun componentMoved(e: ComponentEvent) = syncBounds()
-        })
-        syncBounds()
     }
 
     private fun dispatchClose() {
@@ -78,17 +70,6 @@ class PlayerFrame(
 
     fun showCanvas() {
         panel.showCanvas()
-    }
-
-    override fun setVisible(visible: Boolean) {
-        super.setVisible(visible)
-        if (visible) syncBounds()
-    }
-
-    private fun syncBounds() {
-        // 播放窗口直接铺满所在屏幕（undecorated 全屏）；ComposeWindow 的 AWT bounds 在 CMP 下不可靠
-        val config = graphicsConfiguration ?: return
-        setBounds(config.bounds)
     }
 
     companion object {

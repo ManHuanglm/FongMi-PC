@@ -6,11 +6,11 @@ import java.awt.Canvas
 import java.awt.Color
 import java.awt.Dimension
 import java.awt.Font
-import java.awt.Toolkit
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.KeyEvent
 import java.awt.event.WindowEvent
+import java.util.concurrent.Executors
 import javax.swing.BorderFactory
 import javax.swing.Box
 import javax.swing.BoxLayout
@@ -26,6 +26,7 @@ import javax.swing.Timer
 /**
  * Swing 播放面板：CENTER=视频 Canvas（mpv wid 直绘），SOUTH=控制条
  * 键盘：Space 暂停 / ←→ 快退快进 / ↑↓ 音量 / F 全屏 / ESC 退出全屏或返回 / D 弹幕 / M 静音
+ * 线程模型：全部 mpv JNA 调用走单线程执行器（网络流阻塞核心锁时不得卡死 EDT），结果经 invokeLater 回刷
  */
 class PlayerPanel(
     private val onBack: () -> Unit,
@@ -66,7 +67,10 @@ class PlayerPanel(
     private var fullscreen = false
     private var danmakuEnabled = false
 
-    private val progressTimer = Timer(250) { updateProgress() }
+    /** mpv JNA 专用单线程执行器：网络流阻塞 mpv 核心锁时 EDT 保持响应 */
+    private val mpvExecutor = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "FongMi-Mpv-Commands") }
+
+    private val progressTimer = Timer(250) { pollProgress() }
 
     init {
         background = Color(0xFF05080C.toInt())
@@ -80,6 +84,13 @@ class PlayerPanel(
         installResizeWorkaround()
         progressTimer.start()
         showMessage("正在准备播放...")
+    }
+
+    /** 在 mpv 命令线程执行（全部 JNA 调用的唯一入口） */
+    private fun mpvExec(block: () -> Unit) {
+        mpvExecutor.execute {
+            runCatching { block() }
+        }
     }
 
     fun showMessage(text: String) {
@@ -224,9 +235,9 @@ class PlayerPanel(
     private fun bindActions() {
         backButton.addActionListener { onBack() }
         fullscreenButton.addActionListener { onToggleFullscreen() }
-        playButton.addActionListener { mpv?.togglePause() }
-        seekBackButton.addActionListener { mpv?.seekBy(-10.0) }
-        seekForwardButton.addActionListener { mpv?.seekBy(10.0) }
+        playButton.addActionListener { mpvExec { mpv?.togglePause() } }
+        seekBackButton.addActionListener { mpvExec { mpv?.seekBy(-10.0) } }
+        seekForwardButton.addActionListener { mpvExec { mpv?.seekBy(10.0) } }
         slider.addMouseListener(object : java.awt.event.MouseAdapter() {
             override fun mousePressed(e: java.awt.event.MouseEvent) {
                 dragging = true
@@ -234,13 +245,18 @@ class PlayerPanel(
 
             override fun mouseReleased(e: java.awt.event.MouseEvent) {
                 dragging = false
-                mpv?.seek(slider.value.toLong().toDouble())
+                val target = slider.value.toLong().toDouble()
+                mpvExec { mpv?.seek(target) }
             }
         })
-        volumeSlider.addChangeListener { mpv?.setVolume(volumeSlider.value.toDouble()) }
+        volumeSlider.addChangeListener {
+            val volume = volumeSlider.value.toDouble()
+            mpvExec { mpv?.setVolume(volume) }
+        }
         speedBox.addActionListener {
             val text = speedBox.selectedItem?.toString() ?: return@addActionListener
-            mpv?.setSpeed(text.removeSuffix("x").toDoubleOrNull() ?: 1.0)
+            val speed = text.removeSuffix("x").toDoubleOrNull() ?: 1.0
+            mpvExec { mpv?.setSpeed(speed) }
         }
         danmakuButton.addActionListener { onToggleDanmaku() }
         danmakuSettingButton.addActionListener { onOpenDanmakuSettings() }
@@ -258,15 +274,15 @@ class PlayerPanel(
 
     private fun bindKeys() {
         val actionMap = mutableMapOf(
-            KeyEvent.VK_SPACE to { mpv?.togglePause() },
-            KeyEvent.VK_LEFT to { mpv?.seekBy(-10.0) },
-            KeyEvent.VK_RIGHT to { mpv?.seekBy(10.0) },
+            KeyEvent.VK_SPACE to { mpvExec { mpv?.togglePause() } },
+            KeyEvent.VK_LEFT to { mpvExec { mpv?.seekBy(-10.0) } },
+            KeyEvent.VK_RIGHT to { mpvExec { mpv?.seekBy(10.0) } },
             KeyEvent.VK_UP to { volumeSlider.value = (volumeSlider.value + 5).coerceAtMost(100) },
             KeyEvent.VK_DOWN to { volumeSlider.value = (volumeSlider.value - 5).coerceAtLeast(0) },
             KeyEvent.VK_ESCAPE to { if (fullscreen) onToggleFullscreen() else onBack() },
             KeyEvent.VK_F to { onToggleFullscreen() },
             KeyEvent.VK_D to { onToggleDanmaku() },
-            KeyEvent.VK_M to { mpv?.let { player -> player.setMuted(!player.muted()) } },
+            KeyEvent.VK_M to { mpvExec { mpv?.let { player -> player.setMuted(!player.muted()) } } },
         )
         val inputs = getInputMap(WHEN_IN_FOCUSED_WINDOW)
         val actions = getActionMap()
@@ -296,16 +312,26 @@ class PlayerPanel(
             showMessage("（实验模式）Swing 面板渲染测试 — 若见此文字与深色控制条，说明 SwingPanel 正常")
             return
         }
-        updateProgress()
+        pollProgress()
     }
 
-    private fun updateProgress() {
+    /** 后台线程轮询 mpv 状态（绝不阻塞 EDT），EDT 内回刷 UI */
+    private fun pollProgress() {
         val player = mpv ?: return
-        val position = player.position()
-        val duration = player.duration()
+        mpvExecutor.execute {
+            if (player.isReleased()) return@execute
+            val position = player.position()
+            val duration = player.duration()
+            val paused = player.paused()
+            SwingUtilities.invokeLater { applyProgress(position, duration, paused) }
+        }
+    }
+
+    private fun applyProgress(position: Double, duration: Double, paused: Boolean) {
+        if (mpv == null) return
         if (!dragging && duration > 0) slider.value = ((position / duration) * 1000).toInt().coerceIn(0, 1000)
         timeLabel.text = "${format(position)} / ${format(duration)}"
-        playButton.text = if (player.paused()) "播放" else "暂停"
+        playButton.text = if (paused) "播放" else "暂停"
     }
 
     fun currentSliderPositionSec(): Double {
@@ -330,8 +356,11 @@ class PlayerPanel(
 
     fun releasePlayer() {
         progressTimer.stop()
-        mpv?.release()
+        val player = mpv
         mpv = null
+        // 释放走命令线程（避免与排队的 mpv 调用竞态；release 内部有重入保护）
+        if (player != null) mpvExecutor.execute { player.release() }
+        mpvExecutor.shutdown()
     }
 
     private fun format(seconds: Double): String {

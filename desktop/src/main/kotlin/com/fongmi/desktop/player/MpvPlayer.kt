@@ -59,6 +59,9 @@ class MpvPlayer private constructor(private val lib: MpvNative.MpvLibrary, priva
     @Volatile
     private var released = false
 
+    /** 是否已释放（供外部线程在调用 JNA 前检查） */
+    fun isReleased(): Boolean = released
+
     private val eventThread: Thread
 
     init {
