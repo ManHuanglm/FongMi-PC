@@ -22,13 +22,13 @@ fun main(args: Array<String>) = application {
     App.init()
     val configUrl = args.firstOrNull { it.startsWith("http") || it.startsWith("file") } ?: System.getProperty("fongmi.config", "")
     val demoPlay = args.firstOrNull { it.startsWith("demo://") }?.let { demo ->
-        if (demo == "demo://testsrc") "av://lavfi:testsrc=duration=15:size=1280x720:rate=30" else demo.removePrefix("demo://")
+        if (demo == "demo://testsrc") "av://lavfi:testsrc=duration=120:size=1280x720:rate=30" else demo.removePrefix("demo://")
     }
     val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
     Window(
         onCloseRequest = ::exitApplication,
-        title = "FongMi TV PC",
-        state = windowState
+        state = windowState,
+        title = "FongMi TV PC"
     ) {
         AppRoot(configUrl, demoPlay, windowState)
     }
@@ -40,6 +40,11 @@ private fun AppRoot(configUrl: String, demoPlay: String?, windowState: androidx.
     val model = remember { AppModel() }
     var detailVod by remember { mutableStateOf<Pair<String, String>?>(null) }
     var playRequest by remember { mutableStateOf<PlayRequest?>(null) }
+    // 从 AWT 根窗口列表定位 ComposeWindow（播放窗口需要它做 owner 与边界同步）
+    var composeWindow by remember { mutableStateOf<androidx.compose.ui.awt.ComposeWindow?>(null) }
+    LaunchedEffect(Unit) {
+        composeWindow = java.awt.Window.getOwnerlessWindows().filterIsInstance<androidx.compose.ui.awt.ComposeWindow>().firstOrNull()
+    }
 
     LaunchedEffect(configUrl) {
         if (configUrl.isNotEmpty()) model.loadConfig(configUrl)
@@ -52,8 +57,9 @@ private fun AppRoot(configUrl: String, demoPlay: String?, windowState: androidx.
     }
 
     val current = playRequest
+    val awtWindow = composeWindow
     when {
-        current != null -> PlayerScreen(request = current, windowState = windowState, onBack = { playRequest = null })
+        current != null && awtWindow != null -> PlayerScreen(request = current, composeWindow = awtWindow, onBack = { playRequest = null })
         detailVod != null -> DetailScreen(
             siteKey = detailVod!!.first,
             vodId = detailVod!!.second,

@@ -194,8 +194,12 @@ class PlayerPanel(
         })
     }
 
-    fun attachPlayer(player: MpvPlayer) {
+    fun attachPlayer(player: MpvPlayer?) {
         mpv = player
+        if (player == null) {
+            showMessage("（实验模式）Swing 面板渲染测试 — 若见此文字与深色控制条，说明 SwingPanel 正常")
+            return
+        }
         updateProgress()
     }
 

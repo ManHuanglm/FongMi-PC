@@ -1,5 +1,13 @@
 package com.fongmi.desktop.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -7,140 +15,119 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.awt.SwingPanel
-import androidx.compose.ui.window.WindowPlacement
-import androidx.compose.ui.window.WindowState
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.fongmi.desktop.player.HwndResolver
 import com.fongmi.desktop.player.MpvPlayer
-import com.fongmi.desktop.player.PlayerPanel
+import com.fongmi.desktop.player.PlayerFrame
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.util.concurrent.Callable
-import javax.swing.SwingUtilities
+import java.awt.Window
 
 private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-private const val WINDOW_TITLE = "FongMi TV PC"
-
 /**
- * 播放页：SwingPanel 承载 PlayerPanel（Canvas + 控制条）
- * 挂载时定位 Canvas HWND → 创建 libmpv（wid 嵌入）→ 加载播放地址；卸载时保存进度并释放
+ * 播放页：视频与控制条承载于独立 Swing 窗口（PlayerFrame，owner 为主窗口）
+ * 说明：CMP 的 SwingPanel interop 在本机存在渲染遮挡问题（Compose surface 盖住 AWT 层），独立窗口方案绕开该限制
+ * Compose 侧仅显示加载/错误状态；PlayerFrame 的 bounds 跟随主窗口
  */
 @Composable
-fun PlayerScreen(request: PlayRequest, windowState: WindowState, onBack: () -> Unit) {
+fun PlayerScreen(request: PlayRequest, composeWindow: Window, onBack: () -> Unit) {
     val model = remember { PlayerModel() }
-    var panel by remember { mutableStateOf<PlayerPanel?>(null) }
     var player by remember { mutableStateOf<MpvPlayer?>(null) }
-    var fullscreen by remember { mutableStateOf(windowState.placement == WindowPlacement.Fullscreen) }
+    var frame by remember { mutableStateOf<PlayerFrame?>(null) }
+    var error by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(true) }
+
+    DisposableEffect(request) {
+        val playerFrame = PlayerFrame(
+            owner = composeWindow,
+            onBack = {
+                model.saveProgress(request, player?.position()?.toLong() ?: 0L, player?.duration()?.toLong() ?: 0L)
+                player?.release()
+                player = null
+                onBack()
+            }
+        )
+        frame = playerFrame
+        playerFrame.setVisible(true)
+        onDispose {
+            model.saveProgress(request, player?.position()?.toLong() ?: 0L, player?.duration()?.toLong() ?: 0L)
+            player?.release()
+            player = null
+            playerFrame.dispose()
+        }
+    }
 
     LaunchedEffect(request) {
+        loading = true
+        error = ""
         model.resolve(request) { url, start, headers ->
-            println("[Player] 地址就绪，开始 attach mpv: $url")
             playerScope.launch {
-                val created = attachPlayer(panel) { hwnd ->
-                    println("[Player] Canvas HWND=$hwnd，创建 libmpv 实例")
-                    try {
-                        MpvPlayer.create(hwnd, panelListener(panel)).also { println("[Player] libmpv 实例创建成功") }
-                    } catch (e: Exception) {
-                        println("[Player] libmpv 创建失败: ${e.message}")
-                        SwingUtilities.invokeLater { panel?.showMessage(e.message ?: "播放器创建失败") }
-                        null
-                    }
+                val hwnd = awaitCanvasHwnd()
+                val created = try {
+                    MpvPlayer.create(hwnd, playerListener())
+                } catch (e: Exception) {
+                    error = e.message ?: "播放器创建失败"
+                    null
                 }
                 if (created == null) {
-                    println("[Player] attach 失败（HWND 未定位）")
-                    SwingUtilities.invokeLater { panel?.showMessage(MpvPlayer.runtimeHint()) }
+                    loading = false
+                    if (hwnd == 0L) error = "视频画布未就绪"
                     return@launch
                 }
                 player = created
-                SwingUtilities.invokeLater {
-                    panel?.attachPlayer(created)
+                javax.swing.SwingUtilities.invokeLater {
+                    frame?.attachPlayer(created)
                     created.load(url, headers, start, model.title)
-                    println("[Player] loadfile 已提交: $url")
                 }
+                loading = false
             }
         }
     }
 
-    LaunchedEffect(windowState.placement) {
-        fullscreen = windowState.placement == WindowPlacement.Fullscreen
-        panel?.setFullscreen(fullscreen)
-    }
-
-    DisposableEffect(request) {
-        onDispose {
-            saveNow(model, request, player)
-            player?.release()
-            player = null
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF10141A)), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (loading) {
+                CircularProgressIndicator(color = Color(0xFF3D8BFF))
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = "正在准备播放...", color = Color(0xFF98A2B0), fontSize = 14.sp)
+            }
+            if (error.isNotEmpty()) {
+                Text(text = error, color = Color(0xFFE06A6A), fontSize = 14.sp)
+            }
+            if (model.notice.isNotEmpty()) {
+                Text(text = model.notice, color = Color(0xFF98A2B0), fontSize = 14.sp)
+            }
         }
     }
-
-    SwingPanel(
-        factory = {
-            PlayerPanel(
-                onBack = {
-                    saveNow(model, request, player)
-                    player?.release()
-                    player = null
-                    onBack()
-                },
-                onToggleFullscreen = {
-                    windowState.placement = if (windowState.placement == WindowPlacement.Fullscreen) WindowPlacement.Floating else WindowPlacement.Fullscreen
-                }
-            ).also { panel = it }
-        },
-        modifier = Modifier
-    )
 }
 
-private fun saveNow(model: PlayerModel, request: PlayRequest, player: MpvPlayer?) {
-    val position = player?.position()?.toLong() ?: return
-    val duration = player.duration().toLong()
-    model.saveProgress(request, position, duration)
-}
-
-private fun panelListener(panel: PlayerPanel?) = object : MpvPlayer.Listener {
+private fun playerListener() = object : MpvPlayer.Listener {
     override fun onFileLoaded() {
         println("[Player] mpv 文件装载完成，开始渲染")
-        SwingUtilities.invokeLater { panel?.showCanvas() }
     }
 
     override fun onEndFile(reason: Int, error: Int) {
         println("[Player] 播放结束 reason=$reason error=$error")
-        SwingUtilities.invokeLater { panel?.showMessage("播放结束") }
     }
 
     override fun onError(message: String) {
-        SwingUtilities.invokeLater { panel?.showMessage(message) }
         println("[Player] $message")
-    }
-
-    override fun onLog(level: String, text: String) {
-        if (level.equals("error", ignoreCase = true)) println("[mpv] $text")
     }
 }
 
-/** 轮询等待 Canvas 原生句柄就绪（SwingPanel addNotify 后才有），随后创建播放器 */
-private suspend fun attachPlayer(panel: PlayerPanel?, create: (Long) -> MpvPlayer?): MpvPlayer? {
-    if (panel == null) return null
-    val hwnd = withContext(Dispatchers.IO) {
-        var found: Long? = null
-        repeat(30) {
-            if (found == null) {
-                runCatching {
-                    SwingUtilities.invokeAndWait(Runnable { found = HwndResolver.findCanvasHwnd(WINDOW_TITLE) })
-                }.getOrNull()
-            }
-            if (found == null) delay(200)
-        }
-        found
+/** 轮询等待播放窗口的 Canvas 原生句柄（PlayerFrame 显示后才有），最多 6 秒 */
+private suspend fun awaitCanvasHwnd(): Long {
+    repeat(30) {
+        HwndResolver.findCanvasHwnd("FongMiPlayer")?.let { return it }
+        delay(200)
     }
-    println("[Player] HWND 定位结果: $hwnd")
-    if (hwnd == null || hwnd == 0L) return null
-    return create(hwnd)
+    return 0L
 }
