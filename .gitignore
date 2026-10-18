@@ -1,0 +1,38 @@
+# Gradle
+.gradle/
+build/
+desktop/build/
+desktop/.gradle/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Android build artifacts
+app/build/
+catvod/build/
+chaquo/build/
+quickjs/build/
+captures/
+
+# Local configuration (contains SDK path & keystore credentials)
+local.properties
+
+# Keystores / secrets
+*.jks
+*.keystore
+!debug.keystore
+
+# AAR libs (media3 fork artifacts, not in public repos)
+app/libs/*.aar
+
+# Logs / temp
+*.log
+desktop/schemas/
+desktop/test/
+
+# Build artifacts in workspace root
+*.apk
