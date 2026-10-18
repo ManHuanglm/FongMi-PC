@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -70,7 +72,7 @@ fun main(args: Array<String>) = application {
     }
 }
 
-/** 应用根：主导航（首页/直播/搜索/收藏/配置）+ 详情/播放覆盖层 */
+/** 应用根：左侧竖排导航（品牌+页签）+ 详情/播放覆盖层 */
 @Composable
 private fun AppRoot(configUrl: String, demoPlay: String?, windowState: androidx.compose.ui.window.WindowState) {
     val appModel = remember { AppModel() }
@@ -154,57 +156,85 @@ private fun AppRoot(configUrl: String, demoPlay: String?, windowState: androidx.
                 )
             }
         )
-        else -> Column(modifier = Modifier.fillMaxSize()) {
-            MainNavBar(tab) { tab = it }
-            when (tab) {
-                Tab.HOME -> HomeScreen(
-                    model = appModel,
-                    onOpenVod = { vod ->
+        else -> Row(modifier = Modifier.fillMaxSize()) {
+            SideNav(active = tab, onTab = { tab = it })
+            Box(modifier = Modifier.weight(1f)) {
+                when (tab) {
+                    Tab.HOME -> HomeScreen(
+                        model = appModel,
+                        onOpenVod = { vod ->
+                            appModel.currentVodName = vod.getName()
+                            appModel.currentVodPic = vod.getPic()
+                            // 首页/分类结果不绑定站点，统一归属首页源；搜索结果自带 siteKey
+                            detailVod = appModel.homeSite().getKey() to vod.getId()
+                        },
+                        onOpenSearch = { tab = Tab.SEARCH },
+                        onOpenKeep = { tab = Tab.KEEP },
+                        onPlayHistory = { history ->
+                            // 最近观看续播：按记录的键/配置恢复断点
+                            playRequest = PlayRequest(
+                                siteKey = history.getSiteKey(),
+                                vodId = history.getVodId(),
+                                vodName = history.getVodName().orEmpty(),
+                                vodPic = history.getVodPic().orEmpty(),
+                                flagFlag = history.getVodFlag().orEmpty(),
+                                episodeName = history.getVodRemarks().orEmpty(),
+                                episodeUrl = history.getEpisodeUrl().orEmpty(),
+                                historyKey = history.getKey(),
+                                historyCid = history.getCid()
+                            )
+                        }
+                    )
+                    Tab.LIVE -> LiveScreen(liveModel)
+                    Tab.SEARCH -> SearchScreen(searchModel) { vod ->
                         appModel.currentVodName = vod.getName()
                         appModel.currentVodPic = vod.getPic()
-                        // 首页/分类结果不绑定站点，统一归属首页源；搜索结果自带 siteKey
-                        detailVod = appModel.homeSite().getKey() to vod.getId()
-                    },
-                    onOpenSearch = { tab = Tab.SEARCH },
-                    onOpenKeep = { tab = Tab.KEEP }
-                )
-                Tab.LIVE -> LiveScreen(liveModel)
-                Tab.SEARCH -> SearchScreen(searchModel) { vod ->
-                    appModel.currentVodName = vod.getName()
-                    appModel.currentVodPic = vod.getPic()
-                    detailVod = vod.getSiteKey() to vod.getId()
+                        detailVod = vod.getSiteKey() to vod.getId()
+                    }
+                    Tab.KEEP -> KeepScreen { siteKey, vodId -> detailVod = siteKey to vodId }
+                    Tab.CONFIG -> SettingsScreen(appModel, liveModel) { tab = Tab.HOME }
                 }
-                Tab.KEEP -> KeepScreen { siteKey, vodId -> detailVod = siteKey to vodId }
-                Tab.CONFIG -> SettingsScreen(appModel, liveModel) { tab = Tab.HOME }
             }
         }
     }
 }
 
-/** 顶部主导航栏 */
+/** 左侧竖排导航栏：品牌「影视」+ 页签自上而下排列 */
 @Composable
-private fun MainNavBar(active: Tab, onTab: (Tab) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().background(UiTheme.Panel).padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+private fun SideNav(active: Tab, onTab: (Tab) -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(128.dp)
+            .fillMaxHeight()
+            .background(UiTheme.Panel)
+            .padding(12.dp)
     ) {
-        Text(text = "FongMi TV PC", color = UiTheme.Accent, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.width(32.dp))
+        Text(
+            text = "影视",
+            color = UiTheme.Accent,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 4.dp, top = 6.dp, bottom = 14.dp)
+        )
         Tab.entries.forEach { entry ->
             val selected = entry == active
             Box(
                 modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
                     .background(if (selected) UiTheme.Accent else Color.Transparent, RoundedCornerShape(6.dp))
                     .clickable { onTab(entry) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
                 Text(
                     text = entry.label,
                     color = if (selected) Color.White else UiTheme.TextSub,
-                    fontSize = 14.sp
+                    fontSize = 14.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
         }
+        Spacer(modifier = Modifier.weight(1f))
+        Text(text = "FongMi TV PC", color = UiTheme.TextSub.copy(alpha = 0.5f), fontSize = 10.sp, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
     }
 }
