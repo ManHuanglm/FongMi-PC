@@ -97,6 +97,9 @@ class LiveModel {
                 zoneId = home.getZoneId()
                 liveName = home.getName().ifEmpty { LiveConfig.get().getConfig().getName() }
                 groups = home.getGroups()
+                // 解析器只把频道挂进 Group.channel，未回填 group 反向引用；
+                // 统一补齐，避免 Keep/播放链路 channel.getGroup() 为 null 崩溃
+                groups.forEach { group -> group.getChannel().forEach { it.group(group) } }
                 loaded = true
                 loading = false
                 error = ""
@@ -126,7 +129,8 @@ class LiveModel {
     fun play(channel: Channel) {
         currentChannel = channel
         loadEpg(channel)
-        LiveConfig.get().setKeep(channel)
+        // setKeep 读取 channel.getGroup()，历史残留实例可能缺失反向引用，防御性跳过
+        runCatching { LiveConfig.get().setKeep(channel) }
         playError = ""
         scope.launch {
             try {
@@ -242,8 +246,12 @@ class LiveModel {
         }
         // 本地同步收藏分组（下标 0，由 LiveApi.parse 创建），与安卓 LiveActivity 长按收藏行为一致
         val keepGroup = groups.firstOrNull { it.isKeep() }
-        if (added && keepGroup != null) keepGroup.add(channel)
-        if (!added && keepGroup != null) keepGroup.getChannel().removeIf { it.getName() == channel.getName() }
+        if (keepGroup != null) {
+            if (added) keepGroup.add(channel)
+            else keepGroup.getChannel().removeIf { it.getName() == channel.getName() }
+            // Group.add 内部为拷贝实例，补齐 group 反向引用
+            keepGroup.getChannel().forEach { it.group(keepGroup) }
+        }
         groups = ArrayList(groups)
     }
 

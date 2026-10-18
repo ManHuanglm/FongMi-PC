@@ -2,14 +2,13 @@ package com.github.catvod.utils;
 
 import android.text.TextUtils;
 
+import androidx.annotation.Nullable;
+
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.Strictness;
 import com.google.gson.stream.JsonReader;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.StringReader;
 import java.util.ArrayList;
@@ -39,23 +38,29 @@ public class Json {
         }
     }
 
+    /**
+     * 对齐安卓框架 org.json 行为：JSONTokener 容忍注释。
+     * maven 版 org.json 不支持注释，会导致带注释的 TVBox 订阅被误判为纯文本（走错解析路径）
+     */
     public static boolean isObj(String text) {
-        try {
-            if (TextUtils.isEmpty(text)) return false;
-            new JSONObject(text);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        JsonElement element = parseOrNull(text);
+        return element != null && element.isJsonObject();
     }
 
     public static boolean isArray(String text) {
+        JsonElement element = parseOrNull(text);
+        return element != null && element.isJsonArray();
+    }
+
+    @Nullable
+    private static JsonElement parseOrNull(String text) {
+        if (TextUtils.isEmpty(text)) return null;
         try {
-            if (TextUtils.isEmpty(text)) return false;
-            new JSONArray(text);
-            return true;
-        } catch (Exception e) {
-            return false;
+            JsonReader reader = new JsonReader(new StringReader(text));
+            reader.setStrictness(Strictness.LENIENT);
+            return JsonParser.parseReader(reader);
+        } catch (Throwable e) {
+            return null;
         }
     }
 
