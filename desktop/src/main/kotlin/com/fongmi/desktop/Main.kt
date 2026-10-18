@@ -166,21 +166,7 @@ private fun AppRoot(configUrl: String, demoPlay: String?, windowState: androidx.
                         detailVod = appModel.homeSite().getKey() to vod.getId()
                     },
                     onOpenSearch = { tab = Tab.SEARCH },
-                    onOpenKeep = { tab = Tab.KEEP },
-                    onPlayHistory = { history ->
-                        // 最近观看续播：按记录的键/配置恢复断点
-                        playRequest = PlayRequest(
-                            siteKey = history.getSiteKey(),
-                            vodId = history.getVodId(),
-                            vodName = history.getVodName().orEmpty(),
-                            vodPic = history.getVodPic().orEmpty(),
-                            flagFlag = history.getVodFlag().orEmpty(),
-                            episodeName = history.getVodRemarks().orEmpty(),
-                            episodeUrl = history.getEpisodeUrl().orEmpty(),
-                            historyKey = history.getKey(),
-                            historyCid = history.getCid()
-                        )
-                    }
+                    onOpenKeep = { tab = Tab.KEEP }
                 )
                 Tab.LIVE -> LiveScreen(liveModel)
                 Tab.SEARCH -> SearchScreen(searchModel) { vod ->
