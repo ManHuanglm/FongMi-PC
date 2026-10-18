@@ -42,6 +42,14 @@ class AppModel {
 
     private var extend: MutableMap<String, String> = HashMap()
 
+    /** 设置页联动状态：图片尺寸（PlayerSetting 0-3）/ 壁纸模式（Setting.getWall）/ 自定义壁纸地址 */
+    var posterSize by mutableStateOf(com.fongmi.android.tv.setting.PlayerSetting.getSize())
+    var wall by mutableStateOf(com.fongmi.android.tv.setting.Setting.getWall())
+    var wallUrl by mutableStateOf("")
+
+    /** 图片尺寸对应的海报列宽（dp） */
+    fun posterWidthDp(): Int = intArrayOf(118, 134, 150, 172).getOrElse(posterSize) { 150 }
+
     /** 详情页跳播放页时携带的影片信息（用于 History 记录） */
     var currentVodName: String? = null
     var currentVodPic: String? = null

@@ -128,9 +128,10 @@ class PlayerModel {
         }
     }
 
-    /** 保存进度（播放中周期调用与退出时调用；直播不落 History） */
+    /** 保存进度（播放中周期调用与退出时调用；直播与无痕模式不落 History） */
     fun saveProgress(request: PlayRequest, positionSec: Long, durationSec: Long) {
         if (request.isLive) return
+        if (com.fongmi.android.tv.setting.Setting.isIncognito()) return
         if (positionSec <= 0 || durationSec <= 0) return
         scope.launch {
             runCatching {

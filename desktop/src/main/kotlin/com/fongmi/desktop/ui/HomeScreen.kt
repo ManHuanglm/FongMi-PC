@@ -49,15 +49,46 @@ import com.fongmi.android.tv.bean.Vod
 private val Bg = Color(0xFF10141A)
 private val Panel = Color(0xFF161B24)
 private val Chip = Color(0xFF232B38)
-private val Accent = Color(0xFF3D8BFF)
+private val Accent get() = UiTheme.Accent
 private val TextMain = Color(0xFFE8ECF2)
 private val TextSub = Color(0xFF98A2B0)
 
-/** 首页：源切换 + 分类 Tab + 筛选条 + 影片网格 + 无限分页 */
+/** 壁纸背景：wall 0=自定义图片配置（含降级纯色），1-4=内置深色渐变预设，与原版设置页壁纸轮换对应 */
+@Composable
+private fun wallpaperBrush(model: AppModel): androidx.compose.ui.graphics.Brush = when (model.wall) {
+    1 -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1A2332), Color(0xFF0C111B)))
+    2 -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF241A32), Color(0xFF0F0B18)))
+    3 -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF14262B), Color(0xFF0A1214)))
+    4 -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF1F2B1E), Color(0xFF0D130C)))
+    else -> androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Bg, Bg))
+}
+
+/** 自定义壁纸图片（wall=0 且配置含 wallpaper 地址时铺底，低透明度避免干扰内容） */
+@Composable
+private fun WallpaperImage(model: AppModel) {
+    if (model.wall != 0 || model.wallUrl.isEmpty()) return
+    var bitmap by remember(model.wallUrl) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    androidx.compose.runtime.LaunchedEffect(model.wallUrl) {
+        bitmap = PosterLoader.load(model.wallUrl)
+    }
+    bitmap?.let {
+        androidx.compose.foundation.Image(
+            bitmap = it,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            alpha = 0.25f
+        )
+    }
+}
+
+/** 首页：源切换 + 分类 Tab + 筛选条 + 影片网格 + 无限分页；背景支持壁纸预设/自定义图片 */
 @Composable
 fun HomeScreen(model: AppModel, onOpenVod: (Vod) -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().background(Bg)) {
-        TopBar(model)
+    Box(modifier = Modifier.fillMaxSize().background(wallpaperBrush(model))) {
+        WallpaperImage(model)
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopBar(model)
         if (model.notice.isNotEmpty()) {
             Text(
                 text = model.notice,
@@ -76,6 +107,7 @@ fun HomeScreen(model: AppModel, onOpenVod: (Vod) -> Unit) {
         if (model.types.isNotEmpty()) {
             FilterBar(model)
             PosterGrid(model, onOpenVod)
+        }
         }
     }
 }
@@ -196,7 +228,7 @@ private fun PosterGrid(model: AppModel, onOpenVod: (Vod) -> Unit) {
         return
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(150.dp),
+        columns = GridCells.Adaptive(model.posterWidthDp().dp),
         state = gridState,
         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

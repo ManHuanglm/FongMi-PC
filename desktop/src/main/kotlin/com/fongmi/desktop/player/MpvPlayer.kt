@@ -63,12 +63,13 @@ class MpvPlayer private constructor(private val lib: MpvNative.MpvLibrary, priva
 
     init {
         with(lib) {
-            // 渲染与解码（对齐安卓 mpvplayer：wid 子窗口 d3d11 直绘 + 自动安全硬解）
+            // 渲染与解码（对齐安卓 mpvplayer：wid 子窗口 d3d11 直绘 + 硬解可由设置页关闭）
             // 注意：wid 嵌入不可设 vo=libmpv（那是 render API 模式，与 wid 互斥），走默认 gpu 即可
             // d3d11-flip=no：flip model 交换链会破坏 AWT/Compose 的窗口合成（整窗白屏），必须关闭
             mpv_set_option_string(ctx, "gpu-context", "d3d11")
             mpv_set_option_string(ctx, "d3d11-flip", "no")
-            mpv_set_option_string(ctx, "hwdec", "auto-safe")
+            val hwdec = if (com.github.catvod.utils.Prefers.getBoolean("desktop_hwdec", true)) "auto-safe" else "no"
+            mpv_set_option_string(ctx, "hwdec", hwdec)
             mpv_set_option_string(ctx, "keep-open", "no")
             // wid 必须在 initialize 前设置
             if (hwnd != 0L) mpv_set_option_string(ctx, "wid", hwnd.toString())
@@ -76,6 +77,8 @@ class MpvPlayer private constructor(private val lib: MpvNative.MpvLibrary, priva
             val code = mpv_initialize(ctx)
             if (code < 0) throw MpvUnavailableException("libmpv 初始化失败: ${MpvNative.errorString(lib, code)}")
         }
+        // 倍速不变调（设置页可关）
+        setPitchPreserving(com.github.catvod.utils.Prefers.getBoolean("desktop_pitch", true))
         eventThread = Thread({ eventLoop() }, "FongMi-Mpv-Events").apply { start() }
     }
 

@@ -29,7 +29,6 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.fongmi.android.tv.App
 import com.fongmi.desktop.ui.AppModel
-import com.fongmi.desktop.ui.ConfigScreen
 import com.fongmi.desktop.ui.DetailScreen
 import com.fongmi.desktop.ui.HomeScreen
 import com.fongmi.desktop.ui.KeepScreen
@@ -39,6 +38,7 @@ import com.fongmi.desktop.ui.SearchModel
 import com.fongmi.desktop.ui.SearchScreen
 import com.fongmi.desktop.ui.PlayerScreen
 import com.fongmi.desktop.ui.PlayRequest
+import com.fongmi.desktop.ui.SettingsScreen
 import com.fongmi.desktop.ui.UiTheme
 
 /** 主导航页签（详情/播放为覆盖层，不占页签位） */
@@ -47,11 +47,12 @@ private enum class Tab(val label: String) {
     LIVE("直播"),
     SEARCH("搜索"),
     KEEP("收藏"),
-    CONFIG("配置"),
+    CONFIG("设置"),
 }
 
 fun main(args: Array<String>) = application {
     App.init()
+    UiTheme.applyThemeColor()
     val configUrl = args.firstOrNull { it.startsWith("http") || it.startsWith("file") } ?: System.getProperty("fongmi.config", "")
     val demoPlay = args.firstOrNull { it.startsWith("demo://") }?.let { demo ->
         if (demo == "demo://testsrc") "av://lavfi:testsrc=duration=120:size=1280x720:rate=30" else demo.removePrefix("demo://")
@@ -169,7 +170,7 @@ private fun AppRoot(configUrl: String, demoPlay: String?, windowState: androidx.
                     detailVod = vod.getSiteKey() to vod.getId()
                 }
                 Tab.KEEP -> KeepScreen { siteKey, vodId -> detailVod = siteKey to vodId }
-                Tab.CONFIG -> ConfigScreen(appModel, liveModel) { tab = Tab.HOME }
+                Tab.CONFIG -> SettingsScreen(appModel, liveModel) { tab = Tab.HOME }
             }
         }
     }
