@@ -44,6 +44,7 @@ class PlayerModel {
     var startSeconds by mutableStateOf(0L)
     var headers by mutableStateOf<Map<String, String>>(emptyMap())
     var title by mutableStateOf("")
+    var pendingSniff by mutableStateOf<String?>(null)
 
     private var history: History? = null
     private var historyCid: Int = 0
@@ -87,8 +88,16 @@ class PlayerModel {
                 when {
                     parse == 1 -> {
                         loading = false
-                        notice = "该选集需要网页解析（嗅探功能属 M5 里程碑），暂无法播放"
-                        println("[Player] parse=1 暂不支持: $directUrl / $fallbackUrl")
+                        headers = responseHeaders
+                        // M5：网页解析走 JCEF 嗅探（PlayerScreen 观察 pendingSniff 打开嗅探窗口）
+                        val page = if (directUrl.isNotEmpty()) directUrl else fallbackUrl
+                        if (page.startsWith("http")) {
+                            pendingSniff = page
+                            println("[Player] parse=1 进入嗅探: $page")
+                        } else {
+                            notice = "网页解析地址无效，暂无法播放"
+                            println("[Player] parse=1 无效地址: $page")
+                        }
                     }
                     directUrl.isNotEmpty() -> {
                         playUrl = directUrl

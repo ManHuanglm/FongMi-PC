@@ -58,7 +58,10 @@ fun main(args: Array<String>) = application {
     }
     val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = {
+            com.fongmi.desktop.bridge.SnifferService.shutdown()
+            exitApplication()
+        },
         state = windowState,
         title = "FongMi TV PC"
     ) {

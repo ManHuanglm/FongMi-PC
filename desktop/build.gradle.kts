@@ -4,7 +4,6 @@ plugins {
     kotlin("jvm") version "2.2.10"
     id("org.jetbrains.kotlin.plugin.compose") version "2.2.10"
     id("org.jetbrains.compose") version "1.9.0"
-    application
 }
 
 java {
@@ -134,9 +133,38 @@ dependencies {
     // libmpv JNA 绑定（播放核心；版本与安卓端一致）
     implementation("net.java.dev.jna:jna:5.19.1")
     implementation("net.java.dev.jna:jna-platform:5.19.1")
+
+    // JCEF（网页嗅探，M5）：jcefmaven 首次运行自动拉取平台 natives（下载失败需明确报错）
+    implementation("me.friwi:jcefmaven:132.3.1")
 }
 
-application {
-    mainClass = "com.fongmi.desktop.MainKt"
-    applicationDefaultJvmArgs = listOf("-Dfile.encoding=UTF-8")
+// CMP 应用配置：run/packageDistributionForCurrentOS 等任务由此 DSL 提供（替代原 application 插件，避免 run 任务重名）
+compose.desktop {
+    application {
+        mainClass = "com.fongmi.desktop.MainKt"
+        jvmArgs += "-Dfile.encoding=UTF-8"
+        nativeDistributions {
+            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi)
+            packageName = "FongMiTV"
+            packageVersion = "1.0.0"
+            includeAllModules = true
+            appResourcesRootDir.set(layout.projectDirectory.dir("resources"))
+            windows {
+                menu = true
+                shortcut = true
+                dirChooser = true
+                perUserInstall = true
+            }
+        }
+    }
+}
+
+val copyMpvRuntime = tasks.register<Copy>("copyMpvRuntime") {
+    from(layout.projectDirectory.dir("runtime/mpv"))
+    include("*.dll")
+    into(layout.projectDirectory.dir("resources/windows-x64/mpv"))
+}
+
+tasks.matching { it.name == "prepareAppResources" }.configureEach {
+    dependsOn(copyMpvRuntime)
 }

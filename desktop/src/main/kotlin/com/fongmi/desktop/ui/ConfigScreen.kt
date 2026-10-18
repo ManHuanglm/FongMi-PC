@@ -2,6 +2,7 @@ package com.fongmi.desktop.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.fongmi.android.tv.bean.Config
 import com.fongmi.desktop.compat.DesktopConfig
+import com.fongmi.desktop.compat.DesktopUpdater
+import kotlinx.coroutines.launch
 import javax.swing.JFileChooser
 
 /**
@@ -81,10 +84,25 @@ fun ConfigScreen(appModel: AppModel, liveModel: LiveModel, onLoadVod: () -> Unit
 private fun ConfigHeader(onRefresh: () -> Unit, onImport: () -> Unit) {
     var url by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(0) }
+    var updateText by remember { mutableStateOf("") }
+    var updatePage by remember { mutableStateOf("") }
     Column(modifier = Modifier.fillMaxWidth().background(UiTheme.Panel).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text = "配置管理", color = UiTheme.Accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.weight(1f))
+            if (updateText.isNotEmpty()) {
+                Text(text = updateText, color = UiTheme.TextSub, fontSize = 12.sp, modifier = Modifier.clickable(enabled = updatePage.isNotEmpty()) { DesktopUpdater.open(updatePage) })
+                Spacer(modifier = Modifier.width(10.dp))
+            }
+            ChipButton(text = "检查更新") {
+                updateText = "检查中..."
+                AppModel.scope.launch {
+                    val info = DesktopUpdater.check()
+                    updateText = if (info.version.isEmpty()) info.notes else "官方最新: ${info.version}（点击下载）"
+                    updatePage = info.page
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
             ChipButton(text = "导入本地文件") { importLocalFile(onImport) }
             Spacer(modifier = Modifier.width(8.dp))
             ChipButton(text = "刷新") { onRefresh() }

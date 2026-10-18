@@ -25,10 +25,15 @@ class MpvPlayer private constructor(private val lib: MpvNative.MpvLibrary, priva
 
     companion object {
 
-        /** 运行时目录：开发期 desktop/runtime/mpv/；打包后与主程序同目录；最后回退 %APPDATA%/FongMiTV/mpv */
+        /** 运行时目录：开发期 desktop/runtime/mpv/；打包后随包 resources/mpv；安装目录 mpv；最后回退 %APPDATA%/FongMiTV/mpv */
         fun runtimeDirectory(): File {
             val fromWorkspace = File("runtime/mpv")
             if (fromWorkspace.resolve("libmpv-2.dll").isFile) return fromWorkspace
+            // CMP 打包后资源目录（app/resources，由 appResourcesRootDir 注入 libmpv-2.dll）
+            System.getProperty("compose.application.resources.dir")?.let { dir ->
+                val fromPackage = File(dir, "mpv")
+                if (fromPackage.resolve("libmpv-2.dll").isFile) return fromPackage
+            }
             val fromInstall = File(System.getProperty("user.dir"), "mpv")
             if (fromInstall.resolve("libmpv-2.dll").isFile) return fromInstall
             return File(com.fongmi.desktop.compat.DesktopPaths.rootDir(), "mpv")

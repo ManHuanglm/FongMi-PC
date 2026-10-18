@@ -30,6 +30,7 @@ class AppModel {
     var loading by mutableStateOf(false)
     var message by mutableStateOf("未指定订阅配置\n启动示例: gradlew run --args=<订阅URL 或 AppleCMS 采集地址>")
     var loaded by mutableStateOf(false)
+    var notice by mutableStateOf("")
     var sites by mutableStateOf<List<Site>>(emptyList())
     var siteName by mutableStateOf("")
     var types by mutableStateOf<List<Class>>(emptyList())
@@ -83,6 +84,16 @@ class AppModel {
 
     private fun onConfigReady() {
         sites = VodConfig.get().getSites()
+        // 桌面端不支持源类型的显式提示（禁止静默失败）：
+        // type=3 dex/jar 插件源、type=0 JS/Python 源依赖安卓运行时，桌面端回退空数据
+        val pluginCount = sites.count { it.getType() == 3 }
+        val jsCount = sites.count { it.getType() == 0 }
+        notice = when {
+            pluginCount > 0 && jsCount > 0 -> "有 ${pluginCount} 个插件源（dex/jar）与 ${jsCount} 个 JS/Python 源暂不支持，已隐藏空结果"
+            pluginCount > 0 -> "有 ${pluginCount} 个插件源（dex/jar）暂不支持，已隐藏空结果"
+            jsCount > 0 -> "有 ${jsCount} 个 JS/Python 源暂不支持，已隐藏空结果"
+            else -> ""
+        }
         // 桌面端插件源（dex/jar，type=3）由 SpiderNull 回退为空数据，默认首页自动切到首个 JSON CMS 源
         val home = homeSite()
         if (home.getType() == 3 || home.getType() == 0) {

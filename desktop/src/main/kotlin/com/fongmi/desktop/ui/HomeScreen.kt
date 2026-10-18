@@ -58,6 +58,16 @@ private val TextSub = Color(0xFF98A2B0)
 fun HomeScreen(model: AppModel, onOpenVod: (Vod) -> Unit) {
     Column(modifier = Modifier.fillMaxSize().background(Bg)) {
         TopBar(model)
+        if (model.notice.isNotEmpty()) {
+            Text(
+                text = model.notice,
+                color = Color(0xFFD9A44A),
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().background(Color(0xFF2A2418)).padding(horizontal = 16.dp, vertical = 5.dp)
+            )
+        }
         when {
             model.loading && model.types.isEmpty() -> CenterMessage(model.message, showSpinner = true)
             model.error.isNotEmpty() && model.types.isEmpty() -> CenterMessage("加载失败：${model.error}", showSpinner = false)

@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fongmi.desktop.bridge.SnifferService
 import com.fongmi.desktop.player.DanmakuSettingsDialog
 import com.fongmi.desktop.player.DesktopDanmaku
 import com.fongmi.desktop.player.HwndResolver
@@ -118,6 +119,28 @@ fun PlayerScreen(request: PlayRequest, composeWindow: Window, onBack: () -> Unit
                 if (!request.isLive) DesktopDanmaku.autoAttach(created, request.vodName, request.episodeName, ::danmakuStatus)
             }
         }
+    }
+
+    // M5：parse=1 → JCEF 嗅探窗口，命中直链后直接换源播放
+    LaunchedEffect(model.pendingSniff) {
+        val pageUrl = model.pendingSniff ?: return@LaunchedEffect
+        model.pendingSniff = null
+        if (player == null) return@LaunchedEffect
+        SnifferService.sniff(
+            pageUrl = pageUrl,
+            onFound = { videoUrl ->
+                println("[Player] 嗅探命中: $videoUrl")
+                playerScope.launch {
+                    player?.let { created ->
+                        val headers = model.headers + mapOf("Referer" to pageUrl)
+                        javax.swing.SwingUtilities.invokeLater {
+                            created.load(videoUrl, headers, 0, model.title)
+                        }
+                    }
+                }
+            },
+            onError = { message -> error = message }
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF10141A)), contentAlignment = Alignment.Center) {

@@ -1,0 +1,11 @@
+# 构建产物
+build/
+.kotlin/
+
+# libmpv 运行时（116MB，手动放置或由 copyMpvRuntime 生成）
+runtime/mpv/
+resources/windows-x64/mpv/
+resources/common/mpv/
+
+# JCEF natives 首次运行下载缓存（开发期）
+.jcef/
