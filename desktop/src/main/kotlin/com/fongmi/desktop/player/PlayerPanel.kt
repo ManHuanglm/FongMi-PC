@@ -1,4 +1,4 @@
-﻿package com.fongmi.desktop.player
+package com.fongmi.desktop.player
 
 import java.awt.BorderLayout
 import java.awt.CardLayout
@@ -25,11 +25,13 @@ import javax.swing.Timer
 
 /**
  * Swing 播放面板：CENTER=视频 Canvas（mpv wid 直绘），SOUTH=控制条
- * 键盘：Space 暂停 / ←→ 快退快进 / F 全屏 / ESC 退出全屏或返回
+ * 键盘：Space 暂停 / ←→ 快退快进 / ↑↓ 音量 / F 全屏 / ESC 退出全屏或返回 / D 弹幕 / M 静音
  */
 class PlayerPanel(
     private val onBack: () -> Unit,
     private val onToggleFullscreen: () -> Unit,
+    private val onToggleDanmaku: () -> Unit = {},
+    private val onOpenDanmakuSettings: () -> Unit = {},
 ) : JPanel(BorderLayout()) {
 
     val canvas = Canvas().apply { background = Color(0xFF05080C.toInt()) }
@@ -46,10 +48,15 @@ class PlayerPanel(
     private val backButton = JButton("← 返回")
     private val seekBackButton = JButton("«10s")
     private val seekForwardButton = JButton("10s»")
+    private val danmakuButton = JButton("弹幕")
+    private val danmakuSettingButton = JButton("弹幕设置")
+    private val fxButton = JButton("音效")
+    private val danmakuStatusLabel = JLabel(" ")
 
     private var mpv: MpvPlayer? = null
     private var dragging = false
     private var fullscreen = false
+    private var danmakuEnabled = false
 
     private val progressTimer = Timer(250) { updateProgress() }
 
@@ -82,6 +89,18 @@ class PlayerPanel(
         fullscreenButton.text = if (value) "退出全屏" else "全屏"
     }
 
+    /** 由 Compose 层同步弹幕开关状态 */
+    fun setDanmakuEnabled(value: Boolean) {
+        danmakuEnabled = value
+        danmakuButton.text = if (value) "弹幕:开" else "弹幕:关"
+    }
+
+    /** 弹幕状态提示（搜索中/加载条数/失败原因） */
+    fun setDanmakuStatus(text: String) {
+        danmakuStatusLabel.text = text.ifEmpty { " " }
+        danmakuStatusLabel.toolTipText = text
+    }
+
     private fun buildControlBar(): JPanel {
         val bar = JPanel(BorderLayout())
         bar.background = Color(0xFF10141A.toInt())
@@ -95,6 +114,10 @@ class PlayerPanel(
         top.add(Box.createHorizontalStrut(8))
         timeLabel.foreground = Color(0xFF98A2B0.toInt())
         top.add(timeLabel)
+        top.add(Box.createHorizontalStrut(12))
+        danmakuStatusLabel.foreground = Color(0xFF6FA8DC.toInt())
+        danmakuStatusLabel.font = Font("Microsoft YaHei UI", Font.PLAIN, 12)
+        top.add(danmakuStatusLabel)
 
         val bottom = JPanel()
         bottom.isOpaque = false
@@ -124,6 +147,11 @@ class PlayerPanel(
         speedBox.preferredSize = Dimension(90, 26)
         bottom.add(speedBox)
         bottom.add(Box.createHorizontalStrut(12))
+        bottom.add(danmakuButton)
+        bottom.add(danmakuSettingButton)
+        bottom.add(Box.createHorizontalStrut(8))
+        bottom.add(fxButton)
+        bottom.add(Box.createHorizontalStrut(8))
         bottom.add(fullscreenButton)
 
         bar.add(top, BorderLayout.NORTH)
@@ -160,6 +188,15 @@ class PlayerPanel(
             val text = speedBox.selectedItem?.toString() ?: return@addActionListener
             mpv?.setSpeed(text.removeSuffix("x").toDoubleOrNull() ?: 1.0)
         }
+        danmakuButton.addActionListener { onToggleDanmaku() }
+        danmakuSettingButton.addActionListener { onOpenDanmakuSettings() }
+        fxButton.addActionListener { showAudioFx() }
+    }
+
+    /** 音效设置对话框（挂 owner 为主播放窗口，应用后即时生效） */
+    private fun showAudioFx() {
+        val owner = SwingUtilities.getWindowAncestor(this) ?: return
+        AudioFxDialog(mpv, owner) { }.isVisible = true
     }
 
     private fun bindKeys() {
@@ -171,6 +208,8 @@ class PlayerPanel(
             KeyEvent.VK_DOWN to { volumeSlider.value = (volumeSlider.value - 5).coerceAtLeast(0) },
             KeyEvent.VK_ESCAPE to { if (fullscreen) onToggleFullscreen() else onBack() },
             KeyEvent.VK_F to { onToggleFullscreen() },
+            KeyEvent.VK_D to { onToggleDanmaku() },
+            KeyEvent.VK_M to { mpv?.let { player -> player.setMuted(!player.muted()) } },
         )
         val inputs = getInputMap(WHEN_IN_FOCUSED_WINDOW)
         val actions = getActionMap()

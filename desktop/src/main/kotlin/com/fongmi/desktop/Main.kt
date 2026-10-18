@@ -105,6 +105,26 @@ private fun AppRoot(configUrl: String, demoPlay: String?, windowState: androidx.
         liveModel.playRequest?.let { playRequest = it }
     }
 
+    // 局域网推送桥：手机端经 /action 推配置/设置/搜索到 PC（server 在配置加载时自启）
+    LaunchedEffect(appModel, liveModel, searchModel) {
+        com.fongmi.android.tv.server.Server.get().setListener(object : com.fongmi.android.tv.server.Server.Listener {
+            override fun onPushConfig(url: String) {
+                appModel.loadConfig(url)
+            }
+
+            override fun onSettingConfig(text: String, name: String) {
+                val file = com.fongmi.desktop.compat.DesktopConfigStore.write(name.ifEmpty { "推送配置" }, text)
+                appModel.loadConfig("file:///" + file.absolutePath.replace('\\', '/'))
+            }
+
+            override fun onSearch(word: String) {
+                searchModel.keyword = word
+                searchModel.search(word)
+                tab = Tab.SEARCH
+            }
+        })
+    }
+
     val current = playRequest
     val awtWindow = composeWindow
     when {

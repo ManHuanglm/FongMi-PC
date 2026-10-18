@@ -164,6 +164,42 @@ class MpvPlayer private constructor(private val lib: MpvNative.MpvLibrary, priva
         lib.mpv_set_property_string(ctx, property, value)
     }
 
+    /** 加载外挂字幕/弹幕 ASS 文件并选中（占用主字幕轨；title 用于轨道列表显示） */
+    fun loadSubFile(path: String, title: String, lang: String = "danmaku"): Boolean {
+        val code = lib.mpv_command(ctx, arrayOf("sub-add", path, "select", title, lang))
+        return code >= 0
+    }
+
+    /** 移除字幕轨（弹幕卸载/重建用；不传 id 时移除当前选中轨） */
+    fun removeSub(id: Int? = null) {
+        if (id == null) lib.mpv_command(ctx, arrayOf("sub-remove"))
+        else lib.mpv_command(ctx, arrayOf("sub-remove", id.toString()))
+    }
+
+    /** 字幕时间偏移（秒，正数延后；弹幕时移用 sub-delay 实现） */
+    fun setSubDelay(seconds: Double) {
+        MpvNative.setDouble(lib, ctx, "sub-delay", seconds)
+    }
+
+    fun subDelay(): Double = MpvNative.getDouble(lib, ctx, "sub-delay") ?: 0.0
+
+    /** 音频滤镜链（af 属性整体替换；空串恢复默认） */
+    fun setAudioFilter(chain: String) {
+        lib.mpv_set_property_string(ctx, "af", chain)
+    }
+
+    fun audioFilter(): String? {
+        val pointer = lib.mpv_get_property_string(ctx, "af") ?: return null
+        val text = pointer.getString(0)
+        lib.mpv_free(pointer)
+        return text
+    }
+
+    /** 倍速时是否保持音调（scaletempo2 变速不变调） */
+    fun setPitchPreserving(enabled: Boolean) {
+        lib.mpv_set_property_string(ctx, "audio-pitch", if (enabled) "yes" else "no")
+    }
+
     /** track-list JSON（含 id/type/lang/title/codec），UI 直接解析 */
     fun trackListJson(): String? {
         val pointer = lib.mpv_get_property_string(ctx, "track-list") ?: return null

@@ -40,8 +40,7 @@ val syncAndroidSources = tasks.register<Sync>("syncAndroidSources") {
             "com/fongmi/android/tv/browse/**",
             "com/fongmi/android/tv/playback/**",
             "com/fongmi/android/tv/model/**",
-            // api 包：M3/M4 功能与桌面替换类（LiveApi/LiveParser/EpgParser 依赖可满足随挂载）
-            "com/fongmi/android/tv/api/DanmakuApi.java",
+            // api 包：M3/M4 功能与桌面替换类（LiveApi/LiveParser/EpgParser/DanmakuApi 依赖可满足随挂载）
             "com/fongmi/android/tv/api/SubtitleApi.java",
             "com/fongmi/android/tv/api/loader/**",
             "com/fongmi/android/tv/api/config/WallConfig.java",

@@ -15,11 +15,18 @@ import javax.swing.JFrame
  * 播放窗口：独立 JFrame（无装饰，owner 为主窗口），内嵌 PlayerPanel（Canvas + 控制条）
  * bounds 持续跟随主窗口客户区；窗口关闭等价于"返回"
  */
-class PlayerFrame(owner: Window, onBack: () -> Unit) : JFrame("FongMiPlayer") {
+class PlayerFrame(
+    owner: Window,
+    onBack: () -> Unit,
+    onToggleDanmaku: () -> Unit = {},
+    onOpenDanmakuSettings: () -> Unit = {},
+) : JFrame("FongMiPlayer") {
 
     private val panel = PlayerPanel(
         onBack = { dispatchClose() },
-        onToggleFullscreen = { toggleFullscreen() }
+        onToggleFullscreen = { toggleFullscreen() },
+        onToggleDanmaku = onToggleDanmaku,
+        onOpenDanmakuSettings = onOpenDanmakuSettings,
     )
 
     private val onCloseCallback: (() -> Unit) = onBack
@@ -59,6 +66,9 @@ class PlayerFrame(owner: Window, onBack: () -> Unit) : JFrame("FongMiPlayer") {
         panel.attachPlayer(player)
         panel.showCanvas()
     }
+
+    /** 控制面板透出（弹幕状态/开关由 Compose 层同步） */
+    fun panel(): PlayerPanel = panel
 
     fun showCanvas() {
         panel.showCanvas()

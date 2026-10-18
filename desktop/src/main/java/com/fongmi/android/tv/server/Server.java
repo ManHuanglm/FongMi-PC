@@ -15,7 +15,8 @@ import fi.iki.elonen.NanoHTTPD;
 
 /**
  * 桌面端 com.fongmi.android.tv.server.Server 替换实现：
- * 内嵌最小 NanoHTTPD（仅 /file/ 本地文件服务，满足本地配置与资源加载）；代理/推送随 M4 接入
+ * NanoHTTPD 承载 /file/（本地资源）+ /action（手机推送配置/设置/搜索）+ /device（设备信息）
+ * 推送事件经 Listener 桥接至桌面 UI 层（Main.kt 订阅后驱动 AppModel/LiveModel）
  */
 public class Server {
 
@@ -23,6 +24,17 @@ public class Server {
     private static final int PORT_MAX = 9999;
 
     private volatile Nano nano;
+    private volatile Listener listener;
+
+    /** 桌面 UI 层事件桥（推送/设置/搜索） */
+    public interface Listener {
+
+        void onPushConfig(String url);
+
+        void onSettingConfig(String text, String name);
+
+        void onSearch(String word);
+    }
 
     private static class Loader {
         static volatile Server INSTANCE = new Server();
@@ -30,6 +42,10 @@ public class Server {
 
     public static Server get() {
         return Loader.INSTANCE;
+    }
+
+    public void setListener(Listener listener) {
+        this.listener = listener;
     }
 
     public String getAddress() {
@@ -69,6 +85,21 @@ public class Server {
         nano = null;
     }
 
+    private void dispatchPush(String url) {
+        Listener target = listener;
+        if (target != null && url != null && !url.isEmpty()) target.onPushConfig(url);
+    }
+
+    private void dispatchSetting(String text, String name) {
+        Listener target = listener;
+        if (target != null && text != null && !text.isEmpty()) target.onSettingConfig(text, name == null ? "" : name);
+    }
+
+    private void dispatchSearch(String word) {
+        Listener target = listener;
+        if (target != null && word != null && !word.isEmpty()) target.onSearch(word);
+    }
+
     private static class Nano extends NanoHTTPD {
 
         Nano(int port) {
@@ -79,7 +110,27 @@ public class Server {
         public Response serve(IHTTPSession session) {
             String uri = session.getUri();
             if (uri.startsWith("/file/")) return serveFile(uri.substring("/file/".length()));
+            if (uri.startsWith("/action")) return serveAction(session);
+            if (uri.startsWith("/device")) return newFixedLengthResponse(Response.Status.OK, "application/json", deviceInfo());
             return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found");
+        }
+
+        /** 手机端推送：/action?do=push&url=<订阅地址> ｜ do=setting&text=<配置JSON>&name= ｜ do=search&word= */
+        private Response serveAction(IHTTPSession session) {
+            Map<String, String> params = session.getParms();
+            String action = params.get("do");
+            if (action == null) return newFixedLengthResponse(Response.Status.OK, "text/plain", "OK");
+            switch (action) {
+                case "push" -> Server.get().dispatchPush(params.get("url"));
+                case "setting" -> Server.get().dispatchSetting(params.get("text"), params.get("name"));
+                case "search" -> Server.get().dispatchSearch(params.get("word"));
+            }
+            return newFixedLengthResponse(Response.Status.OK, "text/plain", "OK");
+        }
+
+        /** 设备信息（供手机端识别接收端） */
+        private String deviceInfo() {
+            return "{\"device\":\"FongMi TV PC\",\"type\":2,\"name\":\"FongMi TV PC\"}";
         }
 
         private Response serveFile(String path) {
