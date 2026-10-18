@@ -157,12 +157,31 @@ private fun AppRoot(configUrl: String, demoPlay: String?, windowState: androidx.
         else -> Column(modifier = Modifier.fillMaxSize()) {
             MainNavBar(tab) { tab = it }
             when (tab) {
-                Tab.HOME -> HomeScreen(appModel) { vod ->
-                    appModel.currentVodName = vod.getName()
-                    appModel.currentVodPic = vod.getPic()
-                    // 首页/分类结果不绑定站点，统一归属首页源；搜索结果自带 siteKey
-                    detailVod = appModel.homeSite().getKey() to vod.getId()
-                }
+                Tab.HOME -> HomeScreen(
+                    model = appModel,
+                    onOpenVod = { vod ->
+                        appModel.currentVodName = vod.getName()
+                        appModel.currentVodPic = vod.getPic()
+                        // 首页/分类结果不绑定站点，统一归属首页源；搜索结果自带 siteKey
+                        detailVod = appModel.homeSite().getKey() to vod.getId()
+                    },
+                    onOpenSearch = { tab = Tab.SEARCH },
+                    onOpenKeep = { tab = Tab.KEEP },
+                    onPlayHistory = { history ->
+                        // 最近观看续播：按记录的键/配置恢复断点
+                        playRequest = PlayRequest(
+                            siteKey = history.getSiteKey(),
+                            vodId = history.getVodId(),
+                            vodName = history.getVodName().orEmpty(),
+                            vodPic = history.getVodPic().orEmpty(),
+                            flagFlag = history.getVodFlag().orEmpty(),
+                            episodeName = history.getVodRemarks().orEmpty(),
+                            episodeUrl = history.getEpisodeUrl().orEmpty(),
+                            historyKey = history.getKey(),
+                            historyCid = history.getCid()
+                        )
+                    }
+                )
                 Tab.LIVE -> LiveScreen(liveModel)
                 Tab.SEARCH -> SearchScreen(searchModel) { vod ->
                     appModel.currentVodName = vod.getName()

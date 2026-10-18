@@ -13,7 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-/** 播放请求（详情页选集 / 直播频道 / demo 直连共用；directUrl 跳过 playerContent） */
+/** 播放请求（详情页选集 / 直播频道 / 最近观看 / demo 直连共用；directUrl 跳过 playerContent） */
 data class PlayRequest(
     val siteKey: String,
     val vodId: String,
@@ -25,6 +25,8 @@ data class PlayRequest(
     val directUrl: String? = null,
     val headers: Map<String, String> = emptyMap(),
     val isLive: Boolean = false,
+    val historyKey: String? = null,
+    val historyCid: Int? = null,
 )
 
 /**
@@ -57,13 +59,13 @@ class PlayerModel {
         title = "${request.vodName} ${request.episodeName}"
         scope.launch {
             try {
-                // 直播无断点记忆
+                // 直播无断点记忆；最近观看携带历史键，避免换配置后断点失配
                 var resume = 0L
                 if (!request.isLive) {
-                    val cid = VodConfig.getCid()
+                    val cid = request.historyCid ?: VodConfig.getCid()
                     historyCid = cid
-                    val key = request.siteKey + AppDatabase.SYMBOL + request.vodId + AppDatabase.SYMBOL + cid
-                    history = History.find(key)
+                    val key = request.historyKey ?: (request.siteKey + AppDatabase.SYMBOL + request.vodId + AppDatabase.SYMBOL + cid)
+                    history = AppDatabase.get().getHistoryDao().find(cid, key)
                     val start = history?.getPosition()?.takeIf { it > 0 } ?: 0L
                     val duration = history?.getDuration()?.takeIf { it > 0 } ?: 0L
                     resume = if (duration > 0 && start < duration - 15) start else 0L
