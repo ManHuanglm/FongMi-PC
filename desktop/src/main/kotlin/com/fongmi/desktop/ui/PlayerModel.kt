@@ -27,6 +27,7 @@ data class PlayRequest(
     val isLive: Boolean = false,
     val historyKey: String? = null,
     val historyCid: Int? = null,
+    val configName: String = "",
 )
 
 /**

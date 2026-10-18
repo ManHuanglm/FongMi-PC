@@ -103,8 +103,9 @@ class AppModel {
             else -> ""
         }
         // 桌面端插件源（dex/jar，type=3）由 SpiderNull 回退为空数据，默认首页自动切到首个 JSON CMS 源
+        // 注意：type=0 在安卓端走 CMS HTTP 分支（桌面同样可用），不得自动切换，否则首页源无法持久化
         val home = homeSite()
-        if (home.getType() == 3 || home.getType() == 0) {
+        if (home.getType() == 3) {
             val candidate = sites.firstOrNull { it.getType() == 1 && it.getApi().startsWith("http") }
                 ?: sites.firstOrNull { it.getType() != 3 && it.getApi().startsWith("http") }
             candidate?.let {

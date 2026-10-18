@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,7 +32,14 @@ import androidx.compose.ui.unit.sp
 import com.fongmi.android.tv.bean.Channel
 import com.fongmi.android.tv.bean.EpgData
 
-/** 直播页：分组 Tab（纵列）+ 频道列表 + EPG 节目单/回看面板 */
+private val Overlay = Color(0xEE161B24)
+private val OverlayRow = Color(0x33232B38)
+private val RowSelected = Color(0xFF3D8BFF)
+
+/**
+ * 直播页：布局对齐原版 LiveActivity —— 左侧分组文字列 + 频道列表（编号+台标+名称）浮层样式，
+ * EPG 节目单/回看面板靠右；播放视频由独立 PlayerFrame 窗口承载（wid 直绘）
+ */
 @Composable
 fun LiveScreen(model: LiveModel) {
     LaunchedEffect(Unit) { model.ensureReady() }
@@ -66,11 +75,11 @@ private fun LiveHeader(model: LiveModel) {
     }
 }
 
-/** 左列分组 */
+/** 左列分组：纯文字行（原版浮层样式，选中项高亮） */
 @Composable
 private fun GroupPanel(model: LiveModel) {
     LazyColumn(
-        modifier = Modifier.width(150.dp).fillMaxHeight().background(UiTheme.Panel).padding(vertical = 6.dp),
+        modifier = Modifier.width(120.dp).fillMaxHeight().background(Overlay).padding(vertical = 6.dp),
         state = rememberLazyListState()
     ) {
         items(model.groups.size) { index ->
@@ -79,15 +88,15 @@ private fun GroupPanel(model: LiveModel) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-                    .background(if (selected) UiTheme.Accent else UiTheme.Chip, RoundedCornerShape(6.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .background(if (selected) RowSelected.copy(alpha = 0.35f) else Color.Transparent, RoundedCornerShape(6.dp))
                     .clickable { model.selectGroup(index) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = 12.dp, vertical = 9.dp)
             ) {
                 Text(
-                    text = "${group.getName()} (${group.getChannel().size})",
-                    color = if (selected) Color.White else UiTheme.TextSub,
-                    fontSize = 13.sp,
+                    text = group.getName(),
+                    color = if (selected) UiTheme.Accent else UiTheme.TextMain,
+                    fontSize = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -96,7 +105,7 @@ private fun GroupPanel(model: LiveModel) {
     }
 }
 
-/** 中列频道列表（宽度由外层 RowScope 分配） */
+/** 中列频道列表：编号 + 台标 + 名称（原版频道行样式） */
 @Composable
 private fun ChannelPanel(model: LiveModel, modifier: Modifier = Modifier) {
     val channels = model.channels(model.groupIndex)
@@ -106,7 +115,7 @@ private fun ChannelPanel(model: LiveModel, modifier: Modifier = Modifier) {
     }
     LazyColumn(
         state = rememberLazyListState(),
-        modifier = modifier.fillMaxHeight().padding(8.dp),
+        modifier = modifier.fillMaxHeight().background(Overlay).padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items(channels, key = { it.getNumber() + it.getName() }) { channel ->
@@ -121,14 +130,22 @@ private fun ChannelRow(model: LiveModel, channel: Channel) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (isCurrent) UiTheme.Accent.copy(alpha = 0.18f) else UiTheme.Panel, RoundedCornerShape(6.dp))
-            .border(1.dp, if (isCurrent) UiTheme.Accent else UiTheme.ChipBorder, RoundedCornerShape(6.dp))
+            .background(if (isCurrent) RowSelected.copy(alpha = 0.35f) else OverlayRow, RoundedCornerShape(6.dp))
+            .border(1.dp, if (isCurrent) RowSelected else Color.Transparent, RoundedCornerShape(6.dp))
             .clickable { model.play(channel) }
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (channel.getNumber().isNotEmpty()) {
-            Text(text = channel.getNumber(), color = UiTheme.TextSub, fontSize = 12.sp, modifier = Modifier.width(40.dp))
+            Text(text = channel.getNumber(), color = UiTheme.TextSub, fontSize = 13.sp, modifier = Modifier.width(38.dp))
+        }
+        if (channel.getLogo().isNotEmpty()) {
+            PosterImage(
+                url = channel.getLogo(),
+                name = channel.getShow(),
+                modifier = Modifier.size(width = 34.dp, height = 24.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
         }
         Text(
             text = channel.getShow(),
@@ -155,7 +172,7 @@ private fun ChannelRow(model: LiveModel, channel: Channel) {
 private fun EpgPanel(model: LiveModel) {
     val channel = model.currentChannel
     val epg = model.epg
-    Column(modifier = Modifier.width(360.dp).fillMaxHeight().background(UiTheme.Panel).padding(12.dp)) {
+    Column(modifier = Modifier.width(340.dp).fillMaxHeight().background(Overlay).padding(12.dp)) {
         if (channel == null) {
             CenterMessage("点击频道查看节目单", showSpinner = false, modifier = Modifier.fillMaxSize())
             return
@@ -195,7 +212,7 @@ private fun EpgRow(model: LiveModel, data: EpgData) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (current) UiTheme.Accent.copy(alpha = 0.18f) else UiTheme.Chip, RoundedCornerShape(4.dp))
+            .background(if (current) RowSelected.copy(alpha = 0.30f) else OverlayRow, RoundedCornerShape(4.dp))
             .clickable(enabled = !future) { model.catchup(data) }
             .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {

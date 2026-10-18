@@ -146,7 +146,8 @@ class LiveModel {
                     episodeUrl = "",
                     directUrl = url,
                     headers = result.getHeader(),
-                    isLive = true
+                    isLive = true,
+                    configName = LiveConfig.getDesc()
                 )
                 println("[LiveModel] 播放频道: ${channel.getShow()} -> $url")
             } catch (e: Exception) {
@@ -154,6 +155,16 @@ class LiveModel {
                 e.printStackTrace()
             }
         }
+    }
+
+    /** 上一个/下一个频道（原版播放器中置 ⏮⏭ 语义，当前分组内循环） */
+    fun playByOffset(delta: Int) {
+        val channels = channels(groupIndex)
+        if (channels.isEmpty()) return
+        val current = currentChannel
+        val index = channels.indexOfFirst { it.getName() == current?.getName() }.takeIf { it >= 0 } ?: 0
+        val target = channels[(index + delta + channels.size) % channels.size]
+        play(target)
     }
 
     /** 切换线路后重播当前频道 */
@@ -190,7 +201,8 @@ class LiveModel {
                     episodeUrl = "",
                     directUrl = url,
                     headers = result.getHeader(),
-                    isLive = true
+                    isLive = true,
+                    configName = LiveConfig.getDesc()
                 )
                 println("[LiveModel] 回看: ${channel.getShow()} ${data.format()}")
             } catch (e: Exception) {

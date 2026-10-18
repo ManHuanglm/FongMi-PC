@@ -20,6 +20,9 @@ class PlayerFrame(
     onBack: () -> Unit,
     onToggleDanmaku: () -> Unit = {},
     onOpenDanmakuSettings: () -> Unit = {},
+    onPrevChannel: () -> Unit = {},
+    onNextChannel: () -> Unit = {},
+    onSwitchLine: () -> Unit = {},
 ) : JFrame("FongMiPlayer") {
 
     private val panel = PlayerPanel(
@@ -27,6 +30,9 @@ class PlayerFrame(
         onToggleFullscreen = { toggleFullscreen() },
         onToggleDanmaku = onToggleDanmaku,
         onOpenDanmakuSettings = onOpenDanmakuSettings,
+        onPrevChannel = onPrevChannel,
+        onNextChannel = onNextChannel,
+        onSwitchLine = onSwitchLine,
     )
 
     private val onCloseCallback: (() -> Unit) = onBack

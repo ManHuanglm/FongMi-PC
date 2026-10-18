@@ -134,10 +134,17 @@ private fun AppRoot(configUrl: String, demoPlay: String?, windowState: androidx.
     val current = playRequest
     val awtWindow = composeWindow
     when {
-        current != null && awtWindow != null -> PlayerScreen(request = current, composeWindow = awtWindow, onBack = {
-            playRequest = null
-            liveModel.clearPlay()
-        })
+        current != null && awtWindow != null -> PlayerScreen(
+            request = current,
+            composeWindow = awtWindow,
+            onBack = {
+                playRequest = null
+                liveModel.clearPlay()
+            },
+            onPrevChannel = { liveModel.playByOffset(-1) },
+            onNextChannel = { liveModel.playByOffset(1) },
+            onSwitchLine = { liveModel.switchLine(true) }
+        )
         detailVod != null -> DetailScreen(
             siteKey = detailVod!!.first,
             vodId = detailVod!!.second,

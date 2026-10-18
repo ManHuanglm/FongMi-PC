@@ -32,6 +32,9 @@ class PlayerPanel(
     private val onToggleFullscreen: () -> Unit,
     private val onToggleDanmaku: () -> Unit = {},
     private val onOpenDanmakuSettings: () -> Unit = {},
+    private val onPrevChannel: () -> Unit = {},
+    private val onNextChannel: () -> Unit = {},
+    private val onSwitchLine: () -> Unit = {},
 ) : JPanel(BorderLayout()) {
 
     val canvas = Canvas().apply { background = Color(0xFF05080C.toInt()) }
@@ -42,16 +45,21 @@ class PlayerPanel(
     private val playButton = JButton("播放")
     private val slider = JSlider(0, 1000, 0)
     private val timeLabel = JLabel("00:00 / 00:00")
+    private val titleLabel = JLabel(" ")
     private val volumeSlider = JSlider(0, 100, 100)
     private val speedBox = JComboBox(arrayOf("0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x", "3.0x"))
     private val fullscreenButton = JButton("全屏")
     private val backButton = JButton("← 返回")
     private val seekBackButton = JButton("«10s")
     private val seekForwardButton = JButton("10s»")
+    private val prevChannelButton = JButton("⏮")
+    private val nextChannelButton = JButton("⏭")
     private val danmakuButton = JButton("弹幕")
     private val danmakuSettingButton = JButton("弹幕设置")
     private val fxButton = JButton("音效")
+    private val switchLineButton = JButton("换线")
     private val danmakuStatusLabel = JLabel(" ")
+    private val liveInfoLabel = JLabel(" ")
 
     private var mpv: MpvPlayer? = null
     private var dragging = false
@@ -101,35 +109,62 @@ class PlayerPanel(
         danmakuStatusLabel.toolTipText = text
     }
 
+    /** 媒体标题（顶栏左侧，原版播放器标题位） */
+    fun setMediaTitle(text: String) {
+        titleLabel.text = text.ifEmpty { " " }
+        titleLabel.toolTipText = text
+    }
+
+    /** 直播信息行（配置名 + 线路），非直播隐藏 */
+    fun setLiveInfo(text: String) {
+        liveInfoLabel.text = text
+        liveInfoLabel.isVisible = text.isNotEmpty()
+        switchLineButton.isVisible = text.isNotEmpty()
+    }
+
+    /** 上一个/下一个频道按钮（仅直播显示，对齐原版播放器中置 ⏮⏭） */
+    fun setChannelSwitchVisible(visible: Boolean) {
+        prevChannelButton.isVisible = visible
+        nextChannelButton.isVisible = visible
+    }
+
     private fun buildControlBar(): JPanel {
         val bar = JPanel(BorderLayout())
         bar.background = Color(0xFF10141A.toInt())
         bar.border = BorderFactory.createEmptyBorder(6, 12, 8, 12)
 
+        // 顶行：标题（原版左上标题位）+ 弹幕状态
         val top = JPanel()
         top.isOpaque = false
         top.layout = BoxLayout(top, BoxLayout.X_AXIS)
-        slider.isOpaque = false
-        top.add(slider)
-        top.add(Box.createHorizontalStrut(8))
-        timeLabel.foreground = Color(0xFF98A2B0.toInt())
-        top.add(timeLabel)
-        top.add(Box.createHorizontalStrut(12))
+        titleLabel.foreground = Color(0xFFE8ECF2.toInt())
+        titleLabel.font = Font("Microsoft YaHei UI", Font.BOLD, 15)
+        top.add(titleLabel)
+        top.add(Box.createHorizontalGlue())
         danmakuStatusLabel.foreground = Color(0xFF6FA8DC.toInt())
         danmakuStatusLabel.font = Font("Microsoft YaHei UI", Font.PLAIN, 12)
         top.add(danmakuStatusLabel)
 
+        // 中行：进度条 + 时间
+        val mid = JPanel()
+        mid.isOpaque = false
+        mid.layout = BoxLayout(mid, BoxLayout.X_AXIS)
+        slider.isOpaque = false
+        mid.add(slider)
+        mid.add(Box.createHorizontalStrut(8))
+        timeLabel.foreground = Color(0xFF98A2B0.toInt())
+        mid.add(timeLabel)
+
+        // 底行：返回 ⏮ 播放 ⏭ 快进快退 … 音量 倍速 弹幕 音效 换线 全屏
         val bottom = JPanel()
         bottom.isOpaque = false
         bottom.layout = BoxLayout(bottom, BoxLayout.X_AXIS)
-        styleButton(backButton)
-        styleButton(playButton)
-        styleButton(seekBackButton)
-        styleButton(seekForwardButton)
-        styleButton(fullscreenButton)
+        listOf(backButton, prevChannelButton, playButton, nextChannelButton, seekBackButton, seekForwardButton, fullscreenButton, danmakuButton, danmakuSettingButton, fxButton, switchLineButton).forEach { styleButton(it) }
         bottom.add(backButton)
         bottom.add(Box.createHorizontalStrut(8))
+        bottom.add(prevChannelButton)
         bottom.add(playButton)
+        bottom.add(nextChannelButton)
         bottom.add(Box.createHorizontalStrut(8))
         bottom.add(seekBackButton)
         bottom.add(seekForwardButton)
@@ -152,10 +187,29 @@ class PlayerPanel(
         bottom.add(Box.createHorizontalStrut(8))
         bottom.add(fxButton)
         bottom.add(Box.createHorizontalStrut(8))
+        bottom.add(switchLineButton)
+        bottom.add(Box.createHorizontalStrut(8))
         bottom.add(fullscreenButton)
 
+        // 直播信息行（原版底部左：配置/线路）
+        val liveRow = JPanel()
+        liveRow.isOpaque = false
+        liveRow.layout = BoxLayout(liveRow, BoxLayout.X_AXIS)
+        liveInfoLabel.foreground = Color(0xFF98A2B0.toInt())
+        liveInfoLabel.font = Font("Microsoft YaHei UI", Font.PLAIN, 12)
+        liveRow.add(liveInfoLabel)
+        liveRow.add(Box.createHorizontalGlue())
+        liveRow.isVisible = false
+
+        val south = JPanel()
+        south.isOpaque = false
+        south.layout = BoxLayout(south, BoxLayout.Y_AXIS)
+        south.add(mid)
+        south.add(bottom)
+        south.add(liveRow)
+
         bar.add(top, BorderLayout.NORTH)
-        bar.add(bottom, BorderLayout.SOUTH)
+        bar.add(south, BorderLayout.SOUTH)
         bindActions()
         return bar
     }
@@ -191,6 +245,9 @@ class PlayerPanel(
         danmakuButton.addActionListener { onToggleDanmaku() }
         danmakuSettingButton.addActionListener { onOpenDanmakuSettings() }
         fxButton.addActionListener { showAudioFx() }
+        prevChannelButton.addActionListener { onPrevChannel() }
+        nextChannelButton.addActionListener { onNextChannel() }
+        switchLineButton.addActionListener { onSwitchLine() }
     }
 
     /** 音效设置对话框（挂 owner 为主播放窗口，应用后即时生效） */

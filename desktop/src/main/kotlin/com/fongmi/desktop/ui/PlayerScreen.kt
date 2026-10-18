@@ -42,7 +42,14 @@ private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
  * 弹幕：ASS 轨道挂载（libass 渲染），由 DanmakuSetting 开关/自动匹配驱动
  */
 @Composable
-fun PlayerScreen(request: PlayRequest, composeWindow: Window, onBack: () -> Unit) {
+fun PlayerScreen(
+    request: PlayRequest,
+    composeWindow: Window,
+    onBack: () -> Unit,
+    onPrevChannel: () -> Unit = {},
+    onNextChannel: () -> Unit = {},
+    onSwitchLine: () -> Unit = {},
+) {
     val model = remember { PlayerModel() }
     var player by remember { mutableStateOf<MpvPlayer?>(null) }
     var frame by remember { mutableStateOf<PlayerFrame?>(null) }
@@ -80,9 +87,16 @@ fun PlayerScreen(request: PlayRequest, composeWindow: Window, onBack: () -> Unit
                 onBack()
             },
             onToggleDanmaku = ::toggleDanmaku,
-            onOpenDanmakuSettings = ::openDanmakuSettings
+            onOpenDanmakuSettings = ::openDanmakuSettings,
+            onPrevChannel = onPrevChannel,
+            onNextChannel = onNextChannel,
+            onSwitchLine = onSwitchLine
         )
         frame = playerFrame
+        // 原版播放器布局：左上标题；直播显示 ⏮⏭ 换台与配置/线路信息行
+        playerFrame.panel().setMediaTitle(model.title)
+        playerFrame.panel().setChannelSwitchVisible(request.isLive)
+        playerFrame.panel().setLiveInfo(if (request.isLive) "配置 ${request.configName.ifEmpty { "直播" }} · ${request.episodeName}" else "")
         playerFrame.setVisible(true)
         onDispose {
             model.saveProgress(request, player?.position()?.toLong() ?: 0L, player?.duration()?.toLong() ?: 0L)
