@@ -211,6 +211,53 @@ class MpvPlayer private constructor(private val lib: MpvNative.MpvLibrary, priva
         lib.mpv_set_property_string(ctx, "audio-pitch", if (enabled) "yes" else "no")
     }
 
+    /** 运行时切换硬解（auto-safe / no） */
+    fun setHwdec(value: String) {
+        lib.mpv_set_property_string(ctx, "hwdec", value)
+    }
+
+    /** 单文件循环播放开关 */
+    fun setLoop(infinite: Boolean) {
+        lib.mpv_set_property_string(ctx, "loop-file", if (infinite) "inf" else "no")
+    }
+
+    /** 画面比例/缩放重置（原版"原始"按钮语义） */
+    fun resetVideoScale() {
+        lib.mpv_set_property_string(ctx, "video-aspect-override", "no")
+        lib.mpv_set_property_string(ctx, "video-unscaled", "no")
+    }
+
+    /**
+     * 轨道循环切换（property = sid/aid/vid，type = sub/audio/video）
+     * @return 切换后的轨道描述（无多轨道时返回 null）
+     */
+    fun cycleTrack(property: String, type: String): String? {
+        val tracks = parseTracks(type)
+        if (tracks.size < 2) return null
+        val currentIndex = tracks.indexOfFirst { it.third }
+        val next = tracks[(currentIndex + 1).mod(tracks.size)]
+        lib.mpv_set_property_string(ctx, property, next.first.toString())
+        return next.second
+    }
+
+    /** track-list 解析为 (id, 描述, 是否选中) 列表 */
+    private fun parseTracks(type: String): List<Triple<Int, String, Boolean>> {
+        val json = trackListJson() ?: return emptyList()
+        return runCatching {
+            val root = com.google.gson.JsonParser.parseString(json)
+            if (!root.isJsonArray) return emptyList()
+            root.asJsonArray.mapNotNull { element ->
+                val item = element.asJsonObject
+                if (item.get("type")?.asString != type) return@mapNotNull null
+                val id = item.get("id")?.asInt ?: return@mapNotNull null
+                val desc = listOfNotNull(item.get("lang")?.takeIf { !it.isJsonNull }?.asString, item.get("title")?.takeIf { !it.isJsonNull }?.asString)
+                    .joinToString(" ").ifEmpty { "轨道 $id" }
+                val selected = item.get("selected")?.takeIf { !it.isJsonNull }?.asBoolean ?: false
+                Triple(id, desc, selected)
+            }
+        }.getOrDefault(emptyList())
+    }
+
     /** track-list JSON（含 id/type/lang/title/codec），UI 直接解析 */
     fun trackListJson(): String? {
         val pointer = lib.mpv_get_property_string(ctx, "track-list") ?: return null

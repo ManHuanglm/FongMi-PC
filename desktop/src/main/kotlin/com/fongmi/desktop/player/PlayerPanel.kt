@@ -59,13 +59,30 @@ class PlayerPanel(
     private val danmakuSettingButton = JButton("弹幕设置")
     private val fxButton = JButton("音效")
     private val switchLineButton = JButton("换线")
+    private val hwdecButton = JButton("硬解")
+    private val reloadButton = JButton("刷新")
+    private val replayButton = JButton("重播")
+    private val loopButton = JButton("循环")
+    private val resetScaleButton = JButton("原始")
+    private val subButton = JButton("字幕")
+    private val audioButton = JButton("音轨")
+    private val videoButton = JButton("视轨")
+    private val skipIntroButton = JButton("片头")
+    private val skipOutroButton = JButton("片尾")
     private val danmakuStatusLabel = JLabel(" ")
     private val liveInfoLabel = JLabel(" ")
+    private lateinit var vodRow: JPanel
 
     private var mpv: MpvPlayer? = null
     private var dragging = false
     private var fullscreen = false
     private var danmakuEnabled = false
+    private var hwdecOn = com.github.catvod.utils.Prefers.getBoolean("desktop_hwdec", true)
+    private var loopOn = false
+
+    /** 最近一次装载的媒体（刷新按钮重载用） */
+    private var lastUrl: String = ""
+    private var lastHeaders: Map<String, String> = emptyMap()
 
     /** mpv JNA 专用单线程执行器：网络流阻塞 mpv 核心锁时 EDT 保持响应 */
     private val mpvExecutor = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "FongMi-Mpv-Commands") }
@@ -137,6 +154,40 @@ class PlayerPanel(
     fun setChannelSwitchVisible(visible: Boolean) {
         prevChannelButton.isVisible = visible
         nextChannelButton.isVisible = visible
+    }
+
+    /** 记录当前媒体（刷新按钮重载用） */
+    fun setMedia(url: String, headers: Map<String, String>) {
+        lastUrl = url
+        lastHeaders = headers
+    }
+
+    /** 点播功能行（原版底部：硬解 刷新 重播 循环 原始 | 字幕 音轨 视轨 片头 片尾） */
+    fun setVodRowVisible(visible: Boolean) {
+        listOf(hwdecButton, reloadButton, replayButton, loopButton, resetScaleButton, subButton, audioButton, videoButton, skipIntroButton, skipOutroButton).forEach { it.isVisible = visible }
+        vodRow.isVisible = visible
+    }
+
+    /** VOD 功能行（与原版一致：左解码/播放操作，右轨道/跳转） */
+    private fun buildVodRow(): JPanel {
+        val row = JPanel()
+        row.isOpaque = false
+        row.layout = BoxLayout(row, BoxLayout.X_AXIS)
+        listOf(hwdecButton, reloadButton, replayButton, loopButton, resetScaleButton, subButton, audioButton, videoButton, skipIntroButton, skipOutroButton).forEach { styleButton(it) }
+        hwdecButton.foreground = if (hwdecOn) Color(0xFF6FA8DC.toInt()) else Color(0xFF98A2B0.toInt())
+        row.add(hwdecButton)
+        row.add(reloadButton)
+        row.add(replayButton)
+        row.add(loopButton)
+        row.add(resetScaleButton)
+        row.add(Box.createHorizontalGlue())
+        row.add(subButton)
+        row.add(audioButton)
+        row.add(videoButton)
+        row.add(skipIntroButton)
+        row.add(skipOutroButton)
+        row.isVisible = false
+        return row
     }
 
     private fun buildControlBar(): JPanel {
@@ -212,12 +263,16 @@ class PlayerPanel(
         liveRow.add(Box.createHorizontalGlue())
         liveRow.isVisible = false
 
+        // 点播功能行（原版底部：硬解 刷新 重播 循环 原始 | 字幕 音轨 视轨 片头 片尾）
+        vodRow = buildVodRow()
+
         val south = JPanel()
         south.isOpaque = false
         south.layout = BoxLayout(south, BoxLayout.Y_AXIS)
         south.add(mid)
         south.add(bottom)
         south.add(liveRow)
+        south.add(vodRow)
 
         bar.add(top, BorderLayout.NORTH)
         bar.add(south, BorderLayout.SOUTH)
@@ -264,6 +319,58 @@ class PlayerPanel(
         prevChannelButton.addActionListener { onPrevChannel() }
         nextChannelButton.addActionListener { onNextChannel() }
         switchLineButton.addActionListener { onSwitchLine() }
+        hwdecButton.addActionListener { toggleHwdec() }
+        reloadButton.addActionListener { reloadMedia() }
+        replayButton.addActionListener { mpvExec { mpv?.seek(0.0); mpv?.setPaused(false) } }
+        loopButton.addActionListener { toggleLoop() }
+        resetScaleButton.addActionListener { mpvExec { mpv?.resetVideoScale() } }
+        subButton.addActionListener { cycleTrack("sid", "sub", "字幕") }
+        audioButton.addActionListener { cycleTrack("aid", "audio", "音轨") }
+        videoButton.addActionListener { cycleTrack("vid", "video", "视轨") }
+        skipIntroButton.addActionListener { mpvExec { mpv?.seekBy(90.0) } }
+        skipOutroButton.addActionListener {
+            mpvExec {
+                val duration = mpv?.duration() ?: 0.0
+                if (duration > 30) mpv?.seek(duration - 15)
+            }
+        }
+    }
+
+    /** 硬解开关：运行时切换并持久化（与设置页共享 desktop_hwdec 键） */
+    private fun toggleHwdec() {
+        hwdecOn = !hwdecOn
+        com.github.catvod.utils.Prefers.put("desktop_hwdec", hwdecOn)
+        hwdecButton.foreground = if (hwdecOn) Color(0xFF6FA8DC.toInt()) else Color(0xFF98A2B0.toInt())
+        mpvExec { mpv?.setHwdec(if (hwdecOn) "auto-safe" else "no") }
+    }
+
+    /** 刷新：重载当前媒体并尽量保持进度 */
+    private fun reloadMedia() {
+        val url = lastUrl
+        if (url.isEmpty()) return
+        mpvExec {
+            val player = mpv ?: return@mpvExec
+            val position = player.position().toLong()
+            player.load(url, lastHeaders, position, null)
+        }
+    }
+
+    /** 单文件循环开关 */
+    private fun toggleLoop() {
+        loopOn = !loopOn
+        loopButton.foreground = if (loopOn) Color(0xFF6FA8DC.toInt()) else Color(0xFF98A2B0.toInt())
+        mpvExec { mpv?.setLoop(loopOn) }
+    }
+
+    /** 轨道循环切换，结果提示复用弹幕状态标签 */
+    private fun cycleTrack(property: String, type: String, label: String) {
+        mpvExec {
+            val player = mpv ?: return@mpvExec
+            val desc = player.cycleTrack(property, type)
+            SwingUtilities.invokeLater {
+                setDanmakuStatus(if (desc == null) "$label：无多轨道可切换" else "$label → $desc")
+            }
+        }
     }
 
     /** 音效设置对话框（挂 owner 为主播放窗口，应用后即时生效） */

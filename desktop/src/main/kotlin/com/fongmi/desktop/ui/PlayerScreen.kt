@@ -93,10 +93,11 @@ fun PlayerScreen(
             onSwitchLine = onSwitchLine
         )
         frame = playerFrame
-        // 原版播放器布局：左上标题；直播显示 ⏮⏭ 换台与配置/线路信息行
+        // 原版播放器布局：左上标题；直播显示 ⏮⏭ 换台与配置/线路信息行；点播显示功能行
         playerFrame.panel().setMediaTitle(model.title)
         playerFrame.panel().setChannelSwitchVisible(request.isLive)
         playerFrame.panel().setLiveInfo(if (request.isLive) "配置 ${request.configName.ifEmpty { "直播" }} · ${request.episodeName}" else "")
+        playerFrame.panel().setVodRowVisible(!request.isLive)
         playerFrame.setVisible(true)
         onDispose {
             model.saveProgress(request, player?.position()?.toLong() ?: 0L, player?.duration()?.toLong() ?: 0L)
@@ -127,6 +128,8 @@ fun PlayerScreen(
                 javax.swing.SwingUtilities.invokeLater {
                     frame?.attachPlayer(created)
                     created.load(url, headers, start, model.title)
+                    // 记录媒体供"刷新"重载
+                    frame?.panel()?.setMedia(url, headers)
                 }
                 loading = false
                 // 直播无弹幕；点播按设置自动挂载
