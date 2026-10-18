@@ -33,9 +33,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fongmi.android.tv.api.SiteApi
+import com.fongmi.android.tv.api.config.VodConfig
 import com.fongmi.android.tv.bean.Episode
 import com.fongmi.android.tv.bean.Flag
+import com.fongmi.android.tv.bean.Keep
 import com.fongmi.android.tv.bean.Vod
+import com.fongmi.android.tv.db.AppDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,13 +54,15 @@ private val TextSub = Color(0xFF98A2B0)
 private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /**
- * 详情页：海报/信息/简介/选集列表；选集点击进入播放（M2 libmpv 链路）
+ * 详情页：海报/信息/简介/选集列表/收藏；选集点击进入播放（M2 libmpv 链路）
  */
 @Composable
 fun DetailScreen(siteKey: String, vodId: String, onBack: () -> Unit, onPlay: (String, String, String) -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     var vod by remember { mutableStateOf<Vod?>(null) }
+    var kept by remember { mutableStateOf(false) }
+    var version by remember { mutableStateOf(0) }
 
     LaunchedEffect(siteKey, vodId) {
         scope.launch {
@@ -72,9 +77,17 @@ fun DetailScreen(siteKey: String, vodId: String, onBack: () -> Unit, onPlay: (St
             }
         }
     }
+    // 收藏状态跟随详情数据与收藏操作刷新（Keep key 与 History 键同构）
+    LaunchedEffect(vod, version) {
+        if (vod != null) kept = Keep.find(keepKey(siteKey, vodId)) != null
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(Bg)) {
-        DetailTopBar(onBack)
+        DetailTopBar(onBack, kept) {
+            val current = vod ?: return@DetailTopBar
+            toggleKeep(siteKey, vodId, current)
+            version += 1
+        }
         when {
             loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Accent) }
             error.isNotEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -85,8 +98,30 @@ fun DetailScreen(siteKey: String, vodId: String, onBack: () -> Unit, onPlay: (St
     }
 }
 
+/** Keep 键与安卓 History/Keep 键规则一致：siteKey@@@vodId@@@cid */
+private fun keepKey(siteKey: String, vodId: String): String {
+    return siteKey + AppDatabase.SYMBOL + vodId + AppDatabase.SYMBOL + VodConfig.getCid()
+}
+
+private fun toggleKeep(siteKey: String, vodId: String, vod: Vod) {
+    val key = keepKey(siteKey, vodId)
+    val existing = Keep.find(key)
+    if (existing != null) {
+        existing.delete()
+        return
+    }
+    val keep = Keep()
+    keep.setKey(key)
+    keep.setCid(VodConfig.getCid())
+    keep.setVodPic(vod.getPic())
+    keep.setVodName(vod.getName())
+    keep.setSiteName(vod.getSiteName())
+    keep.setCreateTime(System.currentTimeMillis())
+    keep.save()
+}
+
 @Composable
-private fun DetailTopBar(onBack: () -> Unit) {
+private fun DetailTopBar(onBack: () -> Unit, kept: Boolean, onToggleKeep: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -98,6 +133,15 @@ private fun DetailTopBar(onBack: () -> Unit) {
         }
         Spacer(modifier = Modifier.width(16.dp))
         Text(text = "详情", color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.weight(1f))
+        Box(
+            modifier = Modifier
+                .background(if (kept) Accent.copy(alpha = 0.2f) else Chip, RoundedCornerShape(6.dp))
+                .clickable(onClick = onToggleKeep)
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Text(text = if (kept) "★ 已收藏" else "☆ 收藏", color = if (kept) Accent else TextMain, fontSize = 14.sp)
+        }
     }
 }
 

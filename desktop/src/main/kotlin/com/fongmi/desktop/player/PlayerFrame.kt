@@ -25,6 +25,8 @@ class PlayerFrame(owner: Window, onBack: () -> Unit) : JFrame("FongMiPlayer") {
     private val onCloseCallback: (() -> Unit) = onBack
 
     private fun toggleFullscreen() {
+        // owner 在窗口关闭瞬间可能为 null，避免全屏切换竞态崩溃
+        val owner = getOwner() ?: return
         maximizedBounds = owner.bounds
         extendedState = if (extendedState and MAXIMIZED_BOTH != 0) NORMAL else MAXIMIZED_BOTH
     }

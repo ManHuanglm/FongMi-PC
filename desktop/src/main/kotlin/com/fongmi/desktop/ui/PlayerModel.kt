@@ -13,7 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-/** 播放请求（来自详情页选集点击；directUrl 用于 demo/推送等直连场景） */
+/** 播放请求（详情页选集 / 直播频道 / demo 直连共用；directUrl 跳过 playerContent） */
 data class PlayRequest(
     val siteKey: String,
     val vodId: String,
@@ -23,6 +23,8 @@ data class PlayRequest(
     val episodeName: String,
     val episodeUrl: String,
     val directUrl: String? = null,
+    val headers: Map<String, String> = emptyMap(),
+    val isLive: Boolean = false,
 )
 
 /**
@@ -54,21 +56,25 @@ class PlayerModel {
         title = "${request.vodName} ${request.episodeName}"
         scope.launch {
             try {
-                val cid = VodConfig.getCid()
-                historyCid = cid
-                val key = request.siteKey + AppDatabase.SYMBOL + request.vodId + AppDatabase.SYMBOL + cid
-                history = History.find(key)
-                val start = history?.getPosition()?.takeIf { it > 0 } ?: 0L
-                val duration = history?.getDuration()?.takeIf { it > 0 } ?: 0L
-                val resume = if (duration > 0 && start < duration - 15) start else 0L
+                // 直播无断点记忆
+                var resume = 0L
+                if (!request.isLive) {
+                    val cid = VodConfig.getCid()
+                    historyCid = cid
+                    val key = request.siteKey + AppDatabase.SYMBOL + request.vodId + AppDatabase.SYMBOL + cid
+                    history = History.find(key)
+                    val start = history?.getPosition()?.takeIf { it > 0 } ?: 0L
+                    val duration = history?.getDuration()?.takeIf { it > 0 } ?: 0L
+                    resume = if (duration > 0 && start < duration - 15) start else 0L
+                }
 
-                // demo/直连模式：跳过 playerContent
+                // demo/直连/直播模式：跳过 playerContent
                 request.directUrl?.let { direct ->
                     playUrl = direct
                     startSeconds = resume
                     loading = false
                     println("[Player] 直连播放: $direct, 断点=$resume 秒")
-                    onReady(direct, resume, emptyMap())
+                    onReady(direct, resume, request.headers)
                     return@launch
                 }
 
@@ -113,8 +119,9 @@ class PlayerModel {
         }
     }
 
-    /** 保存进度（播放中周期调用与退出时调用） */
+    /** 保存进度（播放中周期调用与退出时调用；直播不落 History） */
     fun saveProgress(request: PlayRequest, positionSec: Long, durationSec: Long) {
+        if (request.isLive) return
         if (positionSec <= 0 || durationSec <= 0) return
         scope.launch {
             runCatching {
